@@ -34,8 +34,8 @@ fn abs_rank(rank_in_suit: &[[u16; 4]; 4], aggr: u16, k: usize, suit: usize) -> (
         if aggr & bit != 0 {
             count += 1;
             if count == k {
-                for h in 0..DDS_HANDS {
-                    if rank_in_suit[h][suit] & bit != 0 {
+                for (h, hand_ranks) in rank_in_suit.iter().enumerate() {
+                    if hand_ranks[suit] & bit != 0 {
                         return (r, h as i32);
                     }
                 }
@@ -125,9 +125,9 @@ pub(crate) fn later_tricks_min(
             }
 
             let r2 = tpos.second_best[trump as usize].rank;
-            if node_type_store[hh as usize] == MINNODE && r2 != 0 {
-                if tpos.length[hh as usize][trump as usize] > 1
-                    || tpos.length[PARTNER[hh as usize]][trump as usize] > 1
+            if node_type_store[hh as usize] == MINNODE && r2 != 0
+                && (tpos.length[hh as usize][trump as usize] > 1
+                    || tpos.length[PARTNER[hh as usize]][trump as usize] > 1)
                 {
                     for ss in 0..DDS_SUITS {
                         tpos.win_ranks[depth_u][ss] = 0;
@@ -135,7 +135,6 @@ pub(crate) fn later_tricks_min(
                     tpos.win_ranks[depth_u][trump as usize] = BIT_MAP_RANK[r2 as usize];
                     return false;
                 }
-            }
         }
     } else {
         // Not NT.
@@ -255,8 +254,7 @@ pub(crate) fn later_tricks_max(
             }
 
             if node_type_store[hh as usize] == MAXNODE && tpos.second_best[trump as usize].rank != 0
-            {
-                if (tpos.length[hh as usize][trump as usize] > 1
+                && (tpos.length[hh as usize][trump as usize] > 1
                     || tpos.length[PARTNER[hh as usize]][trump as usize] > 1)
                     && tpos.tricks_max + 2 >= target
                 {
@@ -267,7 +265,6 @@ pub(crate) fn later_tricks_max(
                         BIT_MAP_RANK[tpos.second_best[trump as usize].rank as usize];
                     return true;
                 }
-            }
         }
     } else {
         // trump != DDS_NOTRUMP.
@@ -317,6 +314,7 @@ pub(crate) fn later_tricks_max(
 /// The helper consults `node_type_store[hand]` to pick the right
 /// underlying function. For the MAX side, a forced result is a claim;
 /// for the MIN side, a forced result is a concede.
+#[allow(dead_code)]
 pub(crate) fn later_tricks(
     tpos: &mut Pos,
     hand: i32,
