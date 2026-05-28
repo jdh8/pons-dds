@@ -5,7 +5,7 @@
 
 /// A candidate move under consideration by the search.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) struct MoveType {
+pub struct MoveType {
     pub suit: i32,
     pub rank: i32,
     /// Non-zero if this move is the first in a sequence of consecutive
@@ -20,7 +20,7 @@ pub(crate) struct MoveType {
 
 /// Fixed-capacity move buffer for a single ply of the search.
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct MovePly {
+pub struct MovePly {
     pub moves: [MoveType; 14],
     /// Index of the next move to return from `MakeNext`. Bumped on
     /// every successful candidate fetch.
@@ -41,7 +41,7 @@ impl Default for MovePly {
 
 /// Vendor's `highCardType` — a (rank, hand) pair identifying a card.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) struct HighCard {
+pub struct HighCard {
     pub rank: i32,
     pub hand: i32,
 }
