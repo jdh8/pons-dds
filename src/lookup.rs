@@ -13,13 +13,13 @@ use std::sync::LazyLock;
 // for each starting hand.
 
 /// Left-hand opponent of each seat.
-pub(crate) const LHO: [usize; 4] = [1, 2, 3, 0];
+pub const LHO: [usize; 4] = [1, 2, 3, 0];
 
 /// Right-hand opponent of each seat.
-pub(crate) const RHO: [usize; 4] = [3, 0, 1, 2];
+pub const RHO: [usize; 4] = [3, 0, 1, 2];
 
 /// Partner of each seat.
-pub(crate) const PARTNER: [usize; 4] = [2, 3, 0, 1];
+pub const PARTNER: [usize; 4] = [2, 3, 0, 1];
 
 // ---- Rank bitmap ---------------------------------------------------
 //
@@ -28,7 +28,7 @@ pub(crate) const PARTNER: [usize; 4] = [2, 3, 0, 1];
 // (the vendor explains this is "useful for some reason" — kept for
 // porting fidelity).
 
-pub(crate) const BIT_MAP_RANK: [u16; 16] = [
+pub const BIT_MAP_RANK: [u16; 16] = [
     0x0000, 0x0000, 0x0001, 0x0002, 0x0004, 0x0008, 0x0010, 0x0020, 0x0040, 0x0080, 0x0100, 0x0200,
     0x0400, 0x0800, 0x1000, 0x2000,
 ];
@@ -40,7 +40,7 @@ pub(crate) const BIT_MAP_RANK: [u16; 16] = [
 
 /// `HIGHEST_RANK[aggr]` is the absolute rank (2..=14) of the highest
 /// bit set in `aggr`, or 0 if `aggr == 0`.
-pub(crate) static HIGHEST_RANK: LazyLock<[u8; 8192]> = LazyLock::new(|| {
+pub static HIGHEST_RANK: LazyLock<[u8; 8192]> = LazyLock::new(|| {
     let mut t = [0u8; 8192];
     for (aggr, entry) in t.iter_mut().enumerate().skip(1) {
         for r in (2..=14).rev() {
@@ -55,7 +55,7 @@ pub(crate) static HIGHEST_RANK: LazyLock<[u8; 8192]> = LazyLock::new(|| {
 
 /// `LOWEST_RANK[aggr]` — symmetric to `HIGHEST_RANK`, finding the
 /// lowest bit set.
-pub(crate) static LOWEST_RANK: LazyLock<[u8; 8192]> = LazyLock::new(|| {
+pub static LOWEST_RANK: LazyLock<[u8; 8192]> = LazyLock::new(|| {
     let mut t = [0u8; 8192];
     for (aggr, entry) in t.iter_mut().enumerate().skip(1) {
         for (r, &bit) in BIT_MAP_RANK.iter().enumerate().skip(2).take(13) {
@@ -72,7 +72,7 @@ pub(crate) static LOWEST_RANK: LazyLock<[u8; 8192]> = LazyLock::new(|| {
 /// Could be replaced with `aggr.count_ones()` at call sites; kept as a
 /// table here for porting fidelity (the vendor reads this in a hot
 /// loop and the table form preserves identical access patterns).
-pub(crate) static COUNT_TABLE: LazyLock<[u8; 8192]> = LazyLock::new(|| {
+pub static COUNT_TABLE: LazyLock<[u8; 8192]> = LazyLock::new(|| {
     let mut t = [0u8; 8192];
     for (aggr, entry) in t.iter_mut().enumerate() {
         *entry = (aggr as u32).count_ones() as u8;
@@ -84,7 +84,7 @@ pub(crate) static COUNT_TABLE: LazyLock<[u8; 8192]> = LazyLock::new(|| {
 /// `abs_rank` (2..=14) in the suit represented by `aggr`. 1 is the
 /// highest card present, 2 the second-highest, etc. Zero if the bit
 /// for that absolute rank isn't set in `aggr`.
-pub(crate) static REL_RANK: LazyLock<[[i8; 15]; 8192]> = LazyLock::new(|| {
+pub static REL_RANK: LazyLock<[[i8; 15]; 8192]> = LazyLock::new(|| {
     let mut t = [[0i8; 15]; 8192];
     for (aggr, row) in t.iter_mut().enumerate().skip(1) {
         let mut ord: i8 = 0;
@@ -100,7 +100,7 @@ pub(crate) static REL_RANK: LazyLock<[[i8; 15]; 8192]> = LazyLock::new(|| {
 
 /// `WIN_RANKS[aggr][least_win]` is the suit bitmap of the `least_win`
 /// highest cards present in `aggr`. `least_win == 0` is always zero.
-pub(crate) static WIN_RANKS: LazyLock<[[u16; 14]; 8192]> = LazyLock::new(|| {
+pub static WIN_RANKS: LazyLock<[[u16; 14]; 8192]> = LazyLock::new(|| {
     let mut t = [[0u16; 14]; 8192];
     for (aggr, row) in t.iter_mut().enumerate() {
         for (least_win, slot) in row.iter_mut().enumerate().skip(1) {
@@ -131,7 +131,7 @@ pub(crate) static WIN_RANKS: LazyLock<[[u16; 14]; 8192]> = LazyLock::new(|| {
 
 /// A run-decomposition of one suit's rank bitmap.
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct MoveGroup {
+pub struct MoveGroup {
     /// Last valid index into `rank`/`sequence`/`fullseq`/`gap`. -1 if
     /// the source bitmap was empty.
     pub last_group: i8,
@@ -159,7 +159,7 @@ impl MoveGroup {
 }
 
 /// `GROUP_DATA[ris]` decomposes the suit bitmap `ris` into groups.
-pub(crate) static GROUP_DATA: LazyLock<Box<[MoveGroup; 8192]>> = LazyLock::new(|| {
+pub static GROUP_DATA: LazyLock<Box<[MoveGroup; 8192]>> = LazyLock::new(|| {
     // Topside[r] = bits for ranks strictly above r (in the 13-bit
     // rank-2..14 space). Botside[r] = bits strictly below.
     const TOPSIDE: [u16; 15] = [
