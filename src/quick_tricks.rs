@@ -19,14 +19,14 @@ use crate::lookup::{BIT_MAP_RANK, HIGHEST_RANK, LHO, PARTNER, RHO};
 use crate::pos::Pos;
 
 /// MAXNODE constant from the vendor (`#define MAXNODE 1`).
-pub(crate) const MAXNODE: i32 = 1;
+pub const MAXNODE: i32 = 1;
 
 /// MINNODE constant from the vendor (`#define MINNODE 0`).
 #[allow(dead_code)]
-pub(crate) const MINNODE: i32 = 0;
+pub const MINNODE: i32 = 0;
 
 /// `DDS_NOTRUMP` constant (`#define DDS_NOTRUMP 4`).
-pub(crate) const DDS_NOTRUMP: i32 = 4;
+pub const DDS_NOTRUMP: i32 = 4;
 
 /// Number of suits (`#define DDS_SUITS 4`).
 const DDS_SUITS: usize = 4;
@@ -71,7 +71,7 @@ fn abs_rank(rank_in_suit: &[[u16; 4]; 4], aggr: u16, k: usize, suit: usize) -> (
 /// `h`; this is the per-deal MAX/MIN assignment from the vendor's
 /// `thrd.nodeTypeStore`.
 #[inline]
-pub(crate) fn quick_tricks(
+pub fn quick_tricks(
     tpos: &mut Pos,
     hand: i32,
     depth: i32,
@@ -169,22 +169,22 @@ pub(crate) fn quick_tricks(
     }
 
     let mut suit: i32;
-    if trump != DDS_NOTRUMP {
-        suit = trump;
-        lho_trump_ranks = tpos.length[LHO[hand_u]][trump as usize] as i32;
-        rho_trump_ranks = tpos.length[RHO[hand_u]][trump as usize] as i32;
-    } else {
+    if trump == DDS_NOTRUMP {
         suit = 0;
         lho_trump_ranks = 0;
         rho_trump_ranks = 0;
+    } else {
+        suit = trump;
+        lho_trump_ranks = i32::from(tpos.length[LHO[hand_u]][trump as usize]);
+        rho_trump_ranks = i32::from(tpos.length[RHO[hand_u]][trump as usize]);
     }
 
     loop {
         let suit_u = suit as usize;
-        let count_own = tpos.length[hand_u][suit_u] as i32;
-        let count_lho = tpos.length[LHO[hand_u]][suit_u] as i32;
-        let count_rho = tpos.length[RHO[hand_u]][suit_u] as i32;
-        let count_part = tpos.length[PARTNER[hand_u]][suit_u] as i32;
+        let count_own = i32::from(tpos.length[hand_u][suit_u]);
+        let count_lho = i32::from(tpos.length[LHO[hand_u]][suit_u]);
+        let count_rho = i32::from(tpos.length[RHO[hand_u]][suit_u]);
+        let count_part = i32::from(tpos.length[PARTNER[hand_u]][suit_u]);
         let opps = count_lho | count_rho;
 
         if opps == 0 && count_part == 0 {
@@ -196,7 +196,7 @@ pub(crate) fn quick_tricks(
                         suit += 1;
                     }
                 } else if trump != DDS_NOTRUMP && trump == suit {
-                    suit = if trump == 0 { 1 } else { 0 };
+                    suit = i32::from(trump == 0);
                 } else {
                     suit += 1;
                     if trump != DDS_NOTRUMP && suit == trump {
@@ -216,15 +216,79 @@ pub(crate) fn quick_tricks(
                     if qtricks >= cutoff {
                         return qtricks;
                     }
+                }
+                suit += 1;
+                if trump != DDS_NOTRUMP && suit == trump {
                     suit += 1;
-                    if trump != DDS_NOTRUMP && suit == trump {
-                        suit += 1;
+                }
+                if suit > 3 {
+                    break;
+                }
+                continue;
+            }
+            qtricks += count_own;
+            if qtricks >= cutoff {
+                return qtricks;
+            }
+
+            if trump != DDS_NOTRUMP && suit == trump {
+                suit = i32::from(trump == 0);
+            } else {
+                suit += 1;
+                if trump != DDS_NOTRUMP && suit == trump {
+                    suit += 1;
+                }
+            }
+            if suit > 3 {
+                break;
+            }
+            continue;
+        }
+        if opps == 0 && trump != DDS_NOTRUMP && suit == trump {
+            // The partner but not the opponents have cards in
+            // the trump suit.
+            let mut sum = count_own.max(count_part);
+            for s in 0..DDS_SUITS {
+                if sum > 0
+                    && s as i32 != trump
+                    && count_own >= count_part
+                    && tpos.length[hand_u][s] > 0
+                    && tpos.length[PARTNER[hand_u]][s] == 0
+                {
+                    sum += 1;
+                    break;
+                }
+            }
+            // If the additional trick by ruffing causes a cutoff
+            // (qtricks not incremented).
+            if sum >= cutoff {
+                return sum;
+            }
+        } else if opps == 0 {
+            // The partner but not the opponents have cards in the suit.
+            let sum = count_own.min(count_part);
+            if trump == DDS_NOTRUMP {
+                if sum >= cutoff {
+                    return sum;
+                }
+            } else if suit != trump && lho_trump_ranks == 0 && rho_trump_ranks == 0
+                && sum >= cutoff {
+                    return sum;
+                }
+        }
+
+        if comm_partner {
+            if opps == 0 && count_own == 0 {
+                if trump != DDS_NOTRUMP && trump != suit {
+                    if lho_trump_ranks == 0 && rho_trump_ranks == 0 {
+                        qtricks += count_part;
+                        tpos.win_ranks[depth_u][comm_suit as usize] |=
+                            BIT_MAP_RANK[comm_rank as usize];
+
+                        if qtricks >= cutoff {
+                            return qtricks;
+                        }
                     }
-                    if suit > 3 {
-                        break;
-                    }
-                    continue;
-                } else {
                     suit += 1;
                     if trump != DDS_NOTRUMP && suit == trump {
                         suit += 1;
@@ -234,14 +298,16 @@ pub(crate) fn quick_tricks(
                     }
                     continue;
                 }
-            } else {
-                qtricks += count_own;
+                qtricks += count_part;
+                tpos.win_ranks[depth_u][comm_suit as usize] |=
+                    BIT_MAP_RANK[comm_rank as usize];
+
                 if qtricks >= cutoff {
                     return qtricks;
                 }
 
                 if trump != DDS_NOTRUMP && suit == trump {
-                    suit = if trump == 0 { 1 } else { 0 };
+                    suit = i32::from(trump == 0);
                 } else {
                     suit += 1;
                     if trump != DDS_NOTRUMP && suit == trump {
@@ -252,30 +318,25 @@ pub(crate) fn quick_tricks(
                     break;
                 }
                 continue;
-            }
-        } else {
-            if opps == 0 && trump != DDS_NOTRUMP && suit == trump {
-                // The partner but not the opponents have cards in
-                // the trump suit.
+            } else if opps == 0 && trump != DDS_NOTRUMP && suit == trump {
                 let mut sum = count_own.max(count_part);
                 for s in 0..DDS_SUITS {
                     if sum > 0
                         && s as i32 != trump
-                        && count_own >= count_part
-                        && tpos.length[hand_u][s] > 0
-                        && tpos.length[PARTNER[hand_u]][s] == 0
+                        && count_own <= count_part
+                        && tpos.length[PARTNER[hand_u]][s] > 0
+                        && tpos.length[hand_u][s] == 0
                     {
                         sum += 1;
                         break;
                     }
                 }
-                // If the additional trick by ruffing causes a cutoff
-                // (qtricks not incremented).
                 if sum >= cutoff {
+                    tpos.win_ranks[depth_u][comm_suit as usize] |=
+                        BIT_MAP_RANK[comm_rank as usize];
                     return sum;
                 }
             } else if opps == 0 {
-                // The partner but not the opponents have cards in the suit.
                 let sum = count_own.min(count_part);
                 if trump == DDS_NOTRUMP {
                     if sum >= cutoff {
@@ -286,94 +347,11 @@ pub(crate) fn quick_tricks(
                         return sum;
                     }
             }
-
-            if comm_partner {
-                if opps == 0 && count_own == 0 {
-                    if trump != DDS_NOTRUMP && trump != suit {
-                        if lho_trump_ranks == 0 && rho_trump_ranks == 0 {
-                            qtricks += count_part;
-                            tpos.win_ranks[depth_u][comm_suit as usize] |=
-                                BIT_MAP_RANK[comm_rank as usize];
-
-                            if qtricks >= cutoff {
-                                return qtricks;
-                            }
-
-                            suit += 1;
-                            if trump != DDS_NOTRUMP && suit == trump {
-                                suit += 1;
-                            }
-                            if suit > 3 {
-                                break;
-                            }
-                            continue;
-                        } else {
-                            suit += 1;
-                            if trump != DDS_NOTRUMP && suit == trump {
-                                suit += 1;
-                            }
-                            if suit > 3 {
-                                break;
-                            }
-                            continue;
-                        }
-                    } else {
-                        qtricks += count_part;
-                        tpos.win_ranks[depth_u][comm_suit as usize] |=
-                            BIT_MAP_RANK[comm_rank as usize];
-
-                        if qtricks >= cutoff {
-                            return qtricks;
-                        }
-
-                        if trump != DDS_NOTRUMP && suit == trump {
-                            suit = if trump == 0 { 1 } else { 0 };
-                        } else {
-                            suit += 1;
-                            if trump != DDS_NOTRUMP && suit == trump {
-                                suit += 1;
-                            }
-                        }
-                        if suit > 3 {
-                            break;
-                        }
-                        continue;
-                    }
-                } else if opps == 0 && trump != DDS_NOTRUMP && suit == trump {
-                    let mut sum = count_own.max(count_part);
-                    for s in 0..DDS_SUITS {
-                        if sum > 0
-                            && s as i32 != trump
-                            && count_own <= count_part
-                            && tpos.length[PARTNER[hand_u]][s] > 0
-                            && tpos.length[hand_u][s] == 0
-                        {
-                            sum += 1;
-                            break;
-                        }
-                    }
-                    if sum >= cutoff {
-                        tpos.win_ranks[depth_u][comm_suit as usize] |=
-                            BIT_MAP_RANK[comm_rank as usize];
-                        return sum;
-                    }
-                } else if opps == 0 {
-                    let sum = count_own.min(count_part);
-                    if trump == DDS_NOTRUMP {
-                        if sum >= cutoff {
-                            return sum;
-                        }
-                    } else if suit != trump && lho_trump_ranks == 0 && rho_trump_ranks == 0
-                        && sum >= cutoff {
-                            return sum;
-                        }
-                }
-            }
         }
 
         if tpos.winner[suit_u].rank == 0 {
             if trump != DDS_NOTRUMP && suit == trump {
-                suit = if trump == 0 { 1 } else { 0 };
+                suit = i32::from(trump == 0);
             } else {
                 suit += 1;
                 if trump != DDS_NOTRUMP && suit == trump {
@@ -387,8 +365,8 @@ pub(crate) fn quick_tricks(
         }
 
         if tpos.winner[suit_u].hand == hand {
+            let mut res = 0;
             if trump != DDS_NOTRUMP && trump != suit {
-                let mut res = 0;
                 qtricks = qtricks_lead_hand_trump(
                     tpos,
                     cutoff,
@@ -418,7 +396,6 @@ pub(crate) fn quick_tricks(
                     continue;
                 }
             } else {
-                let mut res = 0;
                 qtricks = qtricks_lead_hand_nt(
                     tpos,
                     cutoff,
@@ -442,7 +419,7 @@ pub(crate) fn quick_tricks(
                     return qtricks;
                 } else if res == 2 {
                     if trump != DDS_NOTRUMP && trump == suit {
-                        suit = if trump == 0 { 1 } else { 0 };
+                        suit = i32::from(trump == 0);
                     } else {
                         suit += 1;
                     }
@@ -459,8 +436,8 @@ pub(crate) fn quick_tricks(
                 // Winner found at partner.
                 if comm_partner {
                     // There is communication with the partner.
+                    let mut res = 0;
                     if trump != DDS_NOTRUMP && trump != suit {
-                        let mut res = 0;
                         qtricks = quick_tricks_partner_hand_trump(
                             tpos,
                             cutoff,
@@ -492,7 +469,6 @@ pub(crate) fn quick_tricks(
                             continue;
                         }
                     } else {
-                        let mut res = 0;
                         qtricks = quick_tricks_partner_hand_nt(
                             tpos, cutoff, depth, count_lho, count_rho, count_own, count_part, suit,
                             qtricks, comm_suit, comm_rank, &mut res, hand,
@@ -502,7 +478,7 @@ pub(crate) fn quick_tricks(
                             return qtricks;
                         } else if res == 2 {
                             if trump != DDS_NOTRUMP && trump == suit {
-                                suit = if trump == 0 { 1 } else { 0 };
+                                suit = i32::from(trump == 0);
                             } else {
                                 suit += 1;
                             }
@@ -548,9 +524,10 @@ pub(crate) fn quick_tricks(
                     {
                         lowest_qtricks = 1;
 
-                        let rr = HIGHEST_RANK
-                            [tpos.rank_in_suit[PARTNER[hand_u]][trump as usize] as usize]
-                            as i32;
+                        let rr = i32::from(
+                            HIGHEST_RANK
+                                [tpos.rank_in_suit[PARTNER[hand_u]][trump as usize] as usize],
+                        );
                         if rr != 0 {
                             tpos.win_ranks[depth_u][trump as usize] |= BIT_MAP_RANK[rr as usize];
                             if 1 >= cutoff {
@@ -624,7 +601,7 @@ pub(crate) fn quick_tricks(
         }
 
         if trump != DDS_NOTRUMP && suit == trump {
-            suit = if trump == 0 { 1 } else { 0 };
+            suit = i32::from(trump == 0);
         } else {
             suit += 1;
             if trump != DDS_NOTRUMP && suit == trump {
@@ -649,10 +626,10 @@ pub(crate) fn quick_tricks(
 
             // Note: the vendor flips the cutoff calculation here (uses
             // the OTHER node-type formula). Preserve that quirk.
-            cutoff = if node_type_store[hand_u] != MAXNODE {
-                target - tpos.tricks_max
-            } else {
+            cutoff = if node_type_store[hand_u] == MAXNODE {
                 tpos.tricks_max - target + (depth >> 2) + 2
+            } else {
+                target - tpos.tricks_max
             };
 
             if 1 >= cutoff {
@@ -1077,7 +1054,7 @@ fn quick_tricks_partner_hand_nt(
 /// `ini_depth` is the search's initial depth (the recursion stops short
 /// of the actual initial position).
 #[inline]
-pub(crate) fn quick_tricks_second_hand(
+pub fn quick_tricks_second_hand(
     tpos: &mut Pos,
     hand: i32,
     depth: i32,
@@ -1126,7 +1103,7 @@ pub(crate) fn quick_tricks_second_hand(
         }
 
         // Own side has highest card in suit, which LHO can't ruff.
-        let rr = HIGHEST_RANK[ranks as usize] as i32;
+        let rr = i32::from(HIGHEST_RANK[ranks as usize]);
         tpos.win_ranks[depth_u][ss_u] = BIT_MAP_RANK[rr as usize];
     } else {
         // No easy way to win current trick for own side.
@@ -1179,7 +1156,7 @@ pub(crate) fn quick_tricks_second_hand(
             && tpos.length[PARTNER[hh_u]][s] == 0
         {
             // Long other suit which nobody else holds.
-            qtricks += crate::lookup::COUNT_TABLE[tpos.rank_in_suit[hh_u][s] as usize] as i32;
+            qtricks += i32::from(crate::lookup::COUNT_TABLE[tpos.rank_in_suit[hh_u][s] as usize]);
             if qtricks >= cutoff {
                 return true;
             }
