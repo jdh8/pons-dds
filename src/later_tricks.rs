@@ -52,7 +52,7 @@ fn abs_rank(rank_in_suit: &[[u16; 4]; 4], aggr: u16, k: usize, suit: usize) -> (
 /// this position (so the search can stop and report failure), `true` to
 /// indicate the search must continue.
 #[inline]
-pub(crate) fn later_tricks_min(
+pub fn later_tricks_min(
     tpos: &mut Pos,
     hand: i32,
     depth: i32,
@@ -68,8 +68,8 @@ pub(crate) fn later_tricks_min(
         for ss in 0..DDS_SUITS {
             let hh = tpos.winner[ss].hand;
             if hh != -1 && node_type_store[hh as usize] == MAXNODE {
-                sum += (tpos.length[hh as usize][ss] as i32)
-                    .max(tpos.length[PARTNER[hh as usize]][ss] as i32);
+                sum += i32::from(tpos.length[hh as usize][ss])
+                    .max(i32::from(tpos.length[PARTNER[hh as usize]][ss]));
             }
         }
 
@@ -102,8 +102,8 @@ pub(crate) fn later_tricks_min(
             && tpos.length[PARTNER[hand_u]][trump as usize] == 0
         {
             if tpos.tricks_max + (depth >> 2) + 1
-                - (tpos.length[LHO[hand_u]][trump as usize] as i32)
-                    .max(tpos.length[RHO[hand_u]][trump as usize] as i32)
+                - i32::from(tpos.length[LHO[hand_u]][trump as usize])
+                    .max(i32::from(tpos.length[RHO[hand_u]][trump as usize]))
                 < target
             {
                 for ss in 0..DDS_SUITS {
@@ -182,7 +182,7 @@ pub(crate) fn later_tricks_min(
 /// from this position (so the search can stop and report success),
 /// `false` to indicate the search must continue.
 #[inline]
-pub(crate) fn later_tricks_max(
+pub fn later_tricks_max(
     tpos: &mut Pos,
     hand: i32,
     depth: i32,
@@ -198,8 +198,8 @@ pub(crate) fn later_tricks_max(
         for ss in 0..DDS_SUITS {
             let hh = tpos.winner[ss].hand;
             if hh != -1 && node_type_store[hh as usize] == MINNODE {
-                sum += (tpos.length[hh as usize][ss] as i32)
-                    .max(tpos.length[PARTNER[hh as usize]][ss] as i32);
+                sum += i32::from(tpos.length[hh as usize][ss])
+                    .max(i32::from(tpos.length[PARTNER[hh as usize]][ss]));
             }
         }
 
@@ -231,8 +231,8 @@ pub(crate) fn later_tricks_max(
         if tpos.length[hand_u][trump as usize] == 0
             && tpos.length[PARTNER[hand_u]][trump as usize] == 0
         {
-            let maxlen = (tpos.length[LHO[hand_u]][trump as usize] as i32)
-                .max(tpos.length[RHO[hand_u]][trump as usize] as i32);
+            let maxlen = i32::from(tpos.length[LHO[hand_u]][trump as usize])
+                .max(i32::from(tpos.length[RHO[hand_u]][trump as usize]));
 
             if tpos.tricks_max + maxlen >= target {
                 for ss in 0..DDS_SUITS {
@@ -315,7 +315,7 @@ pub(crate) fn later_tricks_max(
 /// underlying function. For the MAX side, a forced result is a claim;
 /// for the MIN side, a forced result is a concede.
 #[allow(dead_code)]
-pub(crate) fn later_tricks(
+pub fn later_tricks(
     tpos: &mut Pos,
     hand: i32,
     depth: i32,
