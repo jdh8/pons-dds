@@ -27,3 +27,11 @@ rand = "0.10"
 [[bench]]
 name = "solver"
 harness = false
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+debug = "line-tables-only"
+
+[profile.bench]
+inherits = "release"
