@@ -48,8 +48,8 @@ fn abs_rank(rank_in_suit: &[[u16; 4]; 4], aggr: u16, k: usize, suit: usize) -> (
         if aggr & bit != 0 {
             count += 1;
             if count == k {
-                for h in 0..DDS_HANDS {
-                    if rank_in_suit[h][suit] & bit != 0 {
+                for (h, ranks) in rank_in_suit.iter().enumerate() {
+                    if ranks[suit] & bit != 0 {
                         return (r, h as i32);
                     }
                 }
@@ -281,11 +281,10 @@ pub(crate) fn quick_tricks(
                     if sum >= cutoff {
                         return sum;
                     }
-                } else if suit != trump && lho_trump_ranks == 0 && rho_trump_ranks == 0 {
-                    if sum >= cutoff {
+                } else if suit != trump && lho_trump_ranks == 0 && rho_trump_ranks == 0
+                    && sum >= cutoff {
                         return sum;
                     }
-                }
             }
 
             if comm_partner {
@@ -364,11 +363,10 @@ pub(crate) fn quick_tricks(
                         if sum >= cutoff {
                             return sum;
                         }
-                    } else if suit != trump && lho_trump_ranks == 0 && rho_trump_ranks == 0 {
-                        if sum >= cutoff {
+                    } else if suit != trump && lho_trump_ranks == 0 && rho_trump_ranks == 0
+                        && sum >= cutoff {
                             return sum;
                         }
-                    }
                 }
             }
         }
@@ -527,8 +525,7 @@ pub(crate) fn quick_tricks(
                     && tpos.winner[suit_u].hand != PARTNER[hand_u] as i32
                     && tpos.winner[trump as usize].hand != hand
                     && tpos.winner[trump as usize].hand != PARTNER[hand_u] as i32))
-        {
-            if count_part == 0 && tpos.length[PARTNER[hand_u]][trump as usize] > 0 {
+            && count_part == 0 && tpos.length[PARTNER[hand_u]][trump as usize] > 0 {
                 if (count_rho > 0 || tpos.length[RHO[hand_u]][trump as usize] == 0)
                     && (count_lho > 0 || tpos.length[LHO[hand_u]][trump as usize] == 0)
                 {
@@ -621,7 +618,6 @@ pub(crate) fn quick_tricks(
                     continue;
                 }
             }
-        }
 
         if qtricks >= cutoff {
             return qtricks;
@@ -640,8 +636,8 @@ pub(crate) fn quick_tricks(
         }
     }
 
-    if qtricks == 0 {
-        if trump == DDS_NOTRUMP || tpos.winner[trump as usize].hand == -1 {
+    if qtricks == 0
+        && (trump == DDS_NOTRUMP || tpos.winner[trump as usize].hand == -1) {
             for ss in 0..DDS_SUITS {
                 if tpos.winner[ss].hand == -1 {
                     continue;
@@ -663,7 +659,6 @@ pub(crate) fn quick_tricks(
                 return 0;
             }
         }
-    }
 
     *result = false;
     qtricks
