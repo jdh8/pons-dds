@@ -48,9 +48,6 @@ pub(crate) struct Pos {
     pub move_history: [MoveType; MAX_DEPTH],
 
     // ---- Current ply state ----------------------------------------
-    /// Position of the current hand relative to the trick's leader,
-    /// in 0..=3. 0 means the current hand IS the leader.
-    pub hand_rel_first: i32,
     /// Tricks won so far by the MAX player on this branch of the
     /// search.
     pub tricks_max: i32,
@@ -74,7 +71,6 @@ impl Default for Pos {
             win_ranks: [[0; 4]; MAX_DEPTH],
             first: [0; MAX_DEPTH],
             move_history: [MoveType::default(); MAX_DEPTH],
-            hand_rel_first: 0,
             tricks_max: 0,
             winner: [HighCard::default(); 4],
             second_best: [HighCard::default(); 4],
@@ -92,6 +88,5 @@ mod tests {
         assert_eq!(p.rank_in_suit, [[0; 4]; 4]);
         assert_eq!(p.aggr, [0; 4]);
         assert_eq!(p.tricks_max, 0);
-        assert_eq!(p.hand_rel_first, 0);
     }
 }
