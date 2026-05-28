@@ -39,10 +39,22 @@ fn main() {
     let elapsed = start.elapsed();
 
     let (calls, iters) = solver.bisection_stats();
+    let (iter1_ns, later_ns) = solver.bisection_timing();
     #[allow(clippy::cast_precision_loss)]
     let avg = iters as f64 / calls as f64;
     #[allow(clippy::cast_precision_loss)]
     let ms_per_deal = elapsed.as_secs_f64() * 1000.0 / n as f64;
+    #[allow(clippy::cast_precision_loss)]
+    let iter1_share = iter1_ns as f64 / (iter1_ns + later_ns) as f64;
+    let later_iters = iters - calls;
+    #[allow(clippy::cast_precision_loss)]
+    let iter1_avg_ns = iter1_ns as f64 / calls as f64;
+    #[allow(clippy::cast_precision_loss)]
+    let later_avg_ns = if later_iters == 0 {
+        0.0
+    } else {
+        later_ns as f64 / later_iters as f64
+    };
 
     println!("deals solved:           {n}");
     println!("total time:             {elapsed:?}");
@@ -53,4 +65,18 @@ fn main() {
     );
     println!("bisection iterations:   {iters}");
     println!("avg iters per call:     {avg:.3}");
+    println!();
+    println!("iter 1 total:           {iter1_ns} ns ({:.1}%)", iter1_share * 100.0);
+    println!("iters 2..N total:       {later_ns} ns ({:.1}%)", (1.0 - iter1_share) * 100.0);
+    println!("avg iter 1 cost:        {iter1_avg_ns:.0} ns");
+    println!("avg iter 2..N cost:     {later_avg_ns:.0} ns");
+    println!();
+    if iter1_avg_ns > later_avg_ns * 3.0 {
+        println!("→ Iters 2..N are MUCH cheaper than iter 1 (TT covers most of the tree).");
+        println!("  Boolean→score refactor would help less than the 3.86 iter count suggests.");
+    } else if iter1_avg_ns > later_avg_ns * 1.5 {
+        println!("→ Iters 2..N are somewhat cheaper than iter 1. Refactor would help modestly.");
+    } else {
+        println!("→ Iters 2..N cost ~the same as iter 1. Refactor is the biggest available prize.");
+    }
 }

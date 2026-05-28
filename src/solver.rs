@@ -223,6 +223,18 @@ impl Solver {
     pub const fn reset_bisection_stats(&mut self) {
         self.engine.search_target_calls = 0;
         self.engine.bisection_iters = 0;
+        self.engine.iter1_nanos = 0;
+        self.engine.later_nanos = 0;
+    }
+
+    /// Cumulative `(iter1_nanos, later_nanos)` — wall-clock time spent
+    /// in the first bisection iteration of each `search_target` call vs
+    /// in subsequent iterations. The ratio answers whether TT-cached
+    /// internal subtrees make later iters cheap.
+    #[inline]
+    #[must_use]
+    pub const fn bisection_timing(&self) -> (u128, u128) {
+        (self.engine.iter1_nanos, self.engine.later_nanos)
     }
 }
 

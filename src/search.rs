@@ -103,6 +103,14 @@ pub struct Engine {
     /// successive target probes.
     pub search_target_calls: u64,
     pub bisection_iters: u64,
+
+    /// Cumulative wall-clock nanoseconds spent in the FIRST bisection
+    /// iteration of every `search_target` call vs in subsequent
+    /// iterations. The ratio answers "are iters 2..N nearly-free thanks
+    /// to TT caching of internal subtrees, or do they cost the same as
+    /// iter 1?" — diagnostic only, not a hot-path counter.
+    pub iter1_nanos: u128,
+    pub later_nanos: u128,
 }
 
 impl Engine {
@@ -132,6 +140,8 @@ impl Engine {
                 .unwrap_or_else(|_| unreachable!()),
             search_target_calls: 0,
             bisection_iters: 0,
+            iter1_nanos: 0,
+            later_nanos: 0,
         }
     }
 
@@ -953,11 +963,20 @@ impl Engine {
             return 0;
         }
 
+        let mut iter_idx = 0u32;
         while lowerbound < upperbound {
             self.bisection_iters += 1;
+            iter_idx += 1;
             let target = (lowerbound + upperbound + 1) / 2;
             self.reset_best_moves();
+            let t0 = std::time::Instant::now();
             let val = self.ab_search_0(pos, tt, target, ini_depth);
+            let dt = t0.elapsed().as_nanos();
+            if iter_idx == 1 {
+                self.iter1_nanos += dt;
+            } else {
+                self.later_nanos += dt;
+            }
             if val {
                 lowerbound = target;
             } else {
