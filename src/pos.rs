@@ -15,12 +15,12 @@ use crate::move_type::{HighCard, MoveType};
 
 /// Maximum search depth (52 cards / 4 hands + slack for indexing).
 /// The vendor uses 50 as the upper bound for depth-indexed arrays.
-pub(crate) const MAX_DEPTH: usize = 50;
+pub const MAX_DEPTH: usize = 50;
 
 /// Per-search position state. One copy per [`crate::solver::Solver`]
 /// instance; mutated in place during the recursive search.
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct Pos {
+pub struct Pos {
     // ---- Card state ------------------------------------------------
     /// `rank_in_suit[hand][suit]` — bitmap of which ranks (2..=14, bits
     /// 2..=14 of a u16) `hand` holds in `suit`.
