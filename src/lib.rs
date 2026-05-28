@@ -9,10 +9,11 @@
 //!
 //! # v0.1 scope
 //!
-//! This release ships the substrate only — internal types
-//! ([`pos::Pos`], [`move_type::MoveType`]) and the precomputed lookup
-//! tables in [`lookup`]. The public `Solver` API arrives in a later
-//! milestone (Phase 4 of the port).
+//! This release ships the [`Solver`] API: a per-instance solver that
+//! produces a full 5 × 4 [`TrickCountTable`] for a [`FullDeal`], plus a
+//! rayon-parallel batch [`solve_deals`] helper. The internal substrate
+//! (position state, move generator, search engine, transposition table,
+//! and friends) remains crate-private.
 //!
 //! # Algorithm reference
 //!
@@ -28,4 +29,8 @@ pub(crate) mod moves;
 pub(crate) mod pos;
 pub(crate) mod quick_tricks;
 pub(crate) mod search;
+pub mod solver;
 pub(crate) mod tt;
+
+pub use contract_bridge::FullDeal;
+pub use solver::{Solver, TrickCountTable, solve_deals};
