@@ -524,9 +524,7 @@ impl Engine {
         let hand = pos.first[depth_u];
         let tricks = depth >> 2;
 
-        for ss in 0..DDS_SUITS {
-            pos.win_ranks[depth_u][ss] = 0;
-        }
+        pos.win_ranks[depth_u] = [0; DDS_SUITS];
 
         if depth >= 20 && (tricks as usize) < 12 {
             if let Some(value) = self.tt_lookup(pos, tt, target, depth, tricks, hand) {
@@ -588,17 +586,13 @@ impl Engine {
         let success = self.node_type_store[hand_u] == MAXNODE;
         let mut value = !success;
 
-        for ss in 0..DDS_SUITS {
-            self.lowest_win[depth_u][ss] = 0;
-        }
+        self.lowest_win[depth_u] = [0; DDS_SUITS];
         let bm = self.best_move[depth_u];
         let bmtt = self.best_move_tt[depth_u];
         self.moves
             .move_gen_0(tricks, pos, &bm, &bmtt, self.rel.as_ref());
 
-        for ss in 0..DDS_SUITS {
-            pos.win_ranks[depth_u][ss] = 0;
-        }
+        pos.win_ranks[depth_u] = [0; DDS_SUITS];
 
         let mut chosen_move = MoveType::default();
         let mut cutoff = false;
@@ -611,16 +605,16 @@ impl Engine {
             value = self.ab_search_1(pos, tt, target, depth - 1);
             self.undo1(pos, depth, &mply);
 
+            let prev = pos.win_ranks[depth_u - 1];
             if value == success {
-                for ss in 0..DDS_SUITS {
-                    pos.win_ranks[depth_u][ss] = pos.win_ranks[depth_u - 1][ss];
-                }
+                pos.win_ranks[depth_u] = prev;
                 chosen_move = mply;
                 cutoff = true;
                 break;
             }
+            let cur = &mut pos.win_ranks[depth_u];
             for ss in 0..DDS_SUITS {
-                pos.win_ranks[depth_u][ss] |= pos.win_ranks[depth_u - 1][ss];
+                cur[ss] |= prev[ss];
             }
         }
 
@@ -746,18 +740,14 @@ impl Engine {
             return success;
         }
 
-        for ss in 0..DDS_SUITS {
-            self.lowest_win[depth_u][ss] = 0;
-        }
+        self.lowest_win[depth_u] = [0; DDS_SUITS];
         self.moves.move_gen_123(tricks, 1, pos);
         if depth == self.ini_depth {
             let fm = self.forbidden_moves;
             self.moves.purge(tricks, 1, &fm);
         }
 
-        for ss in 0..DDS_SUITS {
-            pos.win_ranks[depth_u][ss] = 0;
-        }
+        pos.win_ranks[depth_u] = [0; DDS_SUITS];
 
         let mut chosen_move = MoveType::default();
         let mut cutoff = false;
@@ -770,16 +760,16 @@ impl Engine {
             value = self.ab_search_2(pos, tt, target, depth - 1);
             self.undo2(pos, depth, &mply);
 
+            let prev = pos.win_ranks[depth_u - 1];
             if value == success {
-                for ss in 0..DDS_SUITS {
-                    pos.win_ranks[depth_u][ss] = pos.win_ranks[depth_u - 1][ss];
-                }
+                pos.win_ranks[depth_u] = prev;
                 chosen_move = mply;
                 cutoff = true;
                 break;
             }
+            let cur = &mut pos.win_ranks[depth_u];
             for ss in 0..DDS_SUITS {
-                pos.win_ranks[depth_u][ss] |= pos.win_ranks[depth_u - 1][ss];
+                cur[ss] |= prev[ss];
             }
         }
         if cutoff {
@@ -803,18 +793,14 @@ impl Engine {
         let mut value = !success;
         let tricks = (depth + 3) >> 2;
 
-        for ss in 0..DDS_SUITS {
-            self.lowest_win[depth_u][ss] = 0;
-        }
+        self.lowest_win[depth_u] = [0; DDS_SUITS];
         self.moves.move_gen_123(tricks, 2, pos);
         if depth == self.ini_depth {
             let fm = self.forbidden_moves;
             self.moves.purge(tricks, 2, &fm);
         }
 
-        for ss in 0..DDS_SUITS {
-            pos.win_ranks[depth_u][ss] = 0;
-        }
+        pos.win_ranks[depth_u] = [0; DDS_SUITS];
 
         let mut chosen_move = MoveType::default();
         let mut cutoff = false;
@@ -827,16 +813,16 @@ impl Engine {
             value = self.ab_search_3(pos, tt, target, depth - 1);
             self.undo3(pos, depth, &mply);
 
+            let prev = pos.win_ranks[depth_u - 1];
             if value == success {
-                for ss in 0..DDS_SUITS {
-                    pos.win_ranks[depth_u][ss] = pos.win_ranks[depth_u - 1][ss];
-                }
+                pos.win_ranks[depth_u] = prev;
                 chosen_move = mply;
                 cutoff = true;
                 break;
             }
+            let cur = &mut pos.win_ranks[depth_u];
             for ss in 0..DDS_SUITS {
-                pos.win_ranks[depth_u][ss] |= pos.win_ranks[depth_u - 1][ss];
+                cur[ss] |= prev[ss];
             }
         }
         if cutoff {
@@ -863,18 +849,14 @@ impl Engine {
         let mut value = !success;
         let tricks = (depth + 3) >> 2;
 
-        for ss in 0..DDS_SUITS {
-            self.lowest_win[depth_u][ss] = 0;
-        }
+        self.lowest_win[depth_u] = [0; DDS_SUITS];
         self.moves.move_gen_123(tricks, 3, pos);
         if depth == self.ini_depth {
             let fm = self.forbidden_moves;
             self.moves.purge(tricks, 3, &fm);
         }
 
-        for ss in 0..DDS_SUITS {
-            pos.win_ranks[depth_u][ss] = 0;
-        }
+        pos.win_ranks[depth_u] = [0; DDS_SUITS];
 
         let mut make_win_rank = [0u16; DDS_SUITS];
         let mut chosen_move = MoveType::default();
@@ -901,26 +883,19 @@ impl Engine {
                 pos.tricks_max -= 1;
             }
 
+            let prev = pos.win_ranks[depth_u - 1];
             if value == success {
-                let (prev_rows, cur_rows) = pos.win_ranks.split_at_mut(depth_u);
-                for ((&prev, dst), &mwr) in prev_rows[depth_u - 1]
-                    .iter()
-                    .zip(cur_rows[0].iter_mut())
-                    .zip(make_win_rank.iter())
-                {
-                    *dst = prev | mwr;
+                let cur = &mut pos.win_ranks[depth_u];
+                for ss in 0..DDS_SUITS {
+                    cur[ss] = prev[ss] | make_win_rank[ss];
                 }
                 chosen_move = mply;
                 cutoff = true;
                 break;
             }
-            let (prev_rows, cur_rows) = pos.win_ranks.split_at_mut(depth_u);
-            for ((&prev, dst), &mwr) in prev_rows[depth_u - 1]
-                .iter()
-                .zip(cur_rows[0].iter_mut())
-                .zip(make_win_rank.iter())
-            {
-                *dst |= prev | mwr;
+            let cur = &mut pos.win_ranks[depth_u];
+            for ss in 0..DDS_SUITS {
+                cur[ss] |= prev[ss] | make_win_rank[ss];
             }
         }
         if cutoff {
