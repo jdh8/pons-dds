@@ -281,8 +281,8 @@ pub(crate) struct TransTable {
     next_slot: u32,
 
     // ---- Hash table root ----
-    /// `tt_root[trick][hand]` — 256-entry bucket array, allocated lazily.
-    tt_root: [[Option<DistHashBuckets>; TT_HANDS]; TT_TRICKS],
+    /// `tt_root[trick][hand]` — 256-entry bucket array, always allocated.
+    tt_root: [[DistHashBuckets; TT_HANDS]; TT_TRICKS],
     /// Last block looked at — set by `lookup`, read by `add`. `None`
     /// after `reset()`.
     last_block_seen: [[Option<BlockId>; TT_HANDS]; TT_TRICKS],
@@ -316,21 +316,24 @@ impl TransTable {
 
     /// Construct a table with explicit memory limits in MiB.
     pub(crate) fn with_memory(default_mb: u32, max_mb: u32) -> Self {
-        let mut tt = Self {
+        Self {
             pages_default: Self::mb_to_pages(default_mb),
             pages_maximum: Self::mb_to_pages(max_mb),
             pages: Vec::new(),
             next_slot: BLOCKS_PER_PAGE as u32, // forces a fresh page on first alloc
-            tt_root: std::array::from_fn(|_| std::array::from_fn(|_| None)),
+            tt_root: std::array::from_fn(|_| {
+                std::array::from_fn(|_| {
+                    vec![DistHash::default(); TT_HASH_BUCKETS]
+                        .into_boxed_slice()
+                        .try_into()
+                        .unwrap_or_else(|_| unreachable!())
+                })
+            }),
             last_block_seen: [[None; TT_HANDS]; TT_TRICKS],
             aggr: Box::new([Aggr::default(); 8192]),
             aggr_ready: false,
             timestamp: 0,
-        };
-        // Match vendor: TTroot is allocated lazily, but in MakeTT().
-        // We allocate it eagerly here so lookup/add don't need to.
-        tt.make_tt();
-        tt
+        }
     }
 
     /// Compute the page budget for a given MiB ceiling, matching
@@ -414,33 +417,14 @@ impl TransTable {
         self.aggr_ready = true;
     }
 
-    // ---- Hash table allocation -------------------------------------
-
-    fn make_tt(&mut self) {
-        for t in 0..TT_TRICKS {
-            for h in 0..TT_HANDS {
-                if self.tt_root[t][h].is_none() {
-                    self.tt_root[t][h] = Some(
-                        vec![DistHash::default(); TT_HASH_BUCKETS]
-                            .into_boxed_slice()
-                            .try_into()
-                            .unwrap_or_else(|_| unreachable!()),
-                    );
-                }
-            }
-        }
-        self.init_tt();
-    }
-
     /// Reset hash table to empty without freeing the boxes.
     fn init_tt(&mut self) {
         for t in 0..TT_TRICKS {
             for h in 0..TT_HANDS {
-                if let Some(buckets) = self.tt_root[t][h].as_mut() {
-                    for i in 0..TT_HASH_BUCKETS {
-                        buckets[i].next_no = 0;
-                        buckets[i].next_write_no = 0;
-                    }
+                let buckets = &mut self.tt_root[t][h];
+                for i in 0..TT_HASH_BUCKETS {
+                    buckets[i].next_no = 0;
+                    buckets[i].next_write_no = 0;
                 }
                 self.last_block_seen[t][h] = None;
             }
@@ -581,6 +565,7 @@ impl TransTable {
     /// Even on `None`, the lookup may have allocated a fresh block for
     /// this position (so a subsequent [`Self::add`] can extend it). This
     /// matches the vendor's `Lookup` + `Add` pairing.
+    #[inline]
     pub(crate) fn lookup(
         &mut self,
         trick: i32,
@@ -621,6 +606,7 @@ impl TransTable {
     /// Find or create a `WinBlock` for the given `(trick, hand, hash, key)`.
     /// Returns `(block_id, empty)` where `empty == true` means the block
     /// is freshly allocated (nothing to match against yet).
+    #[inline]
     fn lookup_suit(
         &mut self,
         trick: usize,
@@ -629,42 +615,29 @@ impl TransTable {
         key: i64,
     ) -> (BlockId, bool) {
         // Probe the existing entries.
-        if let Some(buckets) = self.tt_root[trick][hand].as_ref() {
-            let dp = &buckets[hashkey];
+        {
+            let dp = &self.tt_root[trick][hand][hashkey];
             for i in 0..(dp.next_no as usize) {
                 if dp.list[i].key == key {
                     return (dp.list[i].pos_block, false);
                 }
             }
-        } else {
-            // tt_root not allocated — shouldn't happen since we allocate
-            // in new(). Defensive fallback: allocate now.
-            self.tt_root[trick][hand] = Some(
-                vec![DistHash::default(); TT_HASH_BUCKETS]
-                    .into_boxed_slice()
-                    .try_into()
-                    .unwrap_or_else(|_| unreachable!()),
-            );
         }
 
         // Not found. Determine whether we have a free slot in the
         // hash bucket. If so, allocate a new WinBlock and bind it.
         // If the bucket is full, reuse a slot (wrap nextWriteNo).
-        let buckets = self.tt_root[trick][hand]
-            .as_ref()
-            .expect("tt_root allocated above");
-        let n = buckets[hashkey].next_no as usize;
-        let write_no = buckets[hashkey].next_write_no as usize;
+        let n = self.tt_root[trick][hand][hashkey].next_no as usize;
+        let write_no = self.tt_root[trick][hand][hashkey].next_write_no as usize;
 
         let (slot_idx, block_id, needs_alloc) = if n == DISTS_PER_ENTRY {
             // Bucket full — reuse existing block at `write_no`.
-            let buckets = self.tt_root[trick][hand].as_ref().unwrap();
             let m = if write_no == DISTS_PER_ENTRY {
                 0
             } else {
                 write_no
             };
-            let bid = buckets[hashkey].list[m].pos_block;
+            let bid = self.tt_root[trick][hand][hashkey].list[m].pos_block;
             (m, bid, false)
         } else {
             // Room available — allocate a fresh block. Note: this can
@@ -675,30 +648,28 @@ impl TransTable {
             (n, bid, true)
         };
 
-        // After possible reset: pull buckets again.
+        // After possible reset: pull bucket again.
         let timestamp = self.timestamp;
         if needs_alloc {
-            let buckets = self.tt_root[trick][hand]
-                .as_mut()
-                .expect("tt_root must still be allocated");
+            let bucket = &mut self.tt_root[trick][hand][hashkey];
             // After reset, next_no will be 0, so use that. Re-derive m.
-            let n_now = buckets[hashkey].next_no as usize;
+            let n_now = bucket.next_no as usize;
             let m = if n_now == DISTS_PER_ENTRY {
                 // Lost the race — bucket re-filled during the alloc.
                 // Reuse current write_no.
-                let w = buckets[hashkey].next_write_no as usize;
+                let w = bucket.next_write_no as usize;
                 if w == DISTS_PER_ENTRY { 0 } else { w }
             } else {
                 // Common path.
-                buckets[hashkey].next_no += 1;
+                bucket.next_no += 1;
                 n_now
             };
-            buckets[hashkey].next_write_no = (m + 1) as i32;
-            if buckets[hashkey].next_write_no > DISTS_PER_ENTRY as i32 {
-                buckets[hashkey].next_write_no = 1;
+            bucket.next_write_no = (m + 1) as i32;
+            if bucket.next_write_no > DISTS_PER_ENTRY as i32 {
+                bucket.next_write_no = 1;
             }
-            buckets[hashkey].list[m].pos_block = block_id;
-            buckets[hashkey].list[m].key = key;
+            bucket.list[m].pos_block = block_id;
+            bucket.list[m].key = key;
             // Update the new block's timestamp_read.
             self.block_mut(block_id).timestamp_read = timestamp;
             self.block_mut(block_id).next_match_no = 0;
@@ -709,16 +680,14 @@ impl TransTable {
         // n == DISTS_PER_ENTRY path: wrap or advance write pointer,
         // reuse block.
         {
-            let buckets = self.tt_root[trick][hand]
-                .as_mut()
-                .expect("tt_root must still be allocated");
-            if buckets[hashkey].next_write_no == DISTS_PER_ENTRY as i32 {
-                buckets[hashkey].next_write_no = 1;
+            let bucket = &mut self.tt_root[trick][hand][hashkey];
+            if bucket.next_write_no == DISTS_PER_ENTRY as i32 {
+                bucket.next_write_no = 1;
             } else {
-                buckets[hashkey].next_write_no += 1;
+                bucket.next_write_no += 1;
             }
-            buckets[hashkey].list[slot_idx].key = key;
-            buckets[hashkey].list[slot_idx].pos_block = block_id;
+            bucket.list[slot_idx].key = key;
+            bucket.list[slot_idx].pos_block = block_id;
         }
         self.block_mut(block_id).next_match_no = 0;
         self.block_mut(block_id).next_write_no = 0;
@@ -727,6 +696,7 @@ impl TransTable {
 
     /// Search a `WinBlock` for an entry matching `top_set` that proves
     /// the bound. Mirrors `LookupCards`.
+    #[inline]
     fn lookup_cards(
         &mut self,
         block_id: BlockId,
@@ -817,6 +787,7 @@ impl TransTable {
     /// `flag == false` clears the `best_move_*` fields on insert (vendor
     /// uses this when the move that produced the bound was a forced
     /// terminal — no useful hint).
+    #[inline]
     pub(crate) fn add(
         &mut self,
         trick: i32,
