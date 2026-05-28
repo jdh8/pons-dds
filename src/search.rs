@@ -180,12 +180,12 @@ impl Engine {
 
         // --- SetDealTables: handLookup + rel + tt.init ---
         let mut hand_lookup = [[0i32; 15]; DDS_SUITS];
-        for s in 0..DDS_SUITS {
+        for (s, suit_lookup) in hand_lookup.iter_mut().enumerate() {
             for r in (2..=14).rev() {
-                hand_lookup[s][r] = 0;
+                suit_lookup[r] = 0;
                 for h in 0..DDS_HANDS {
                     if pos.rank_in_suit[h][s] & BIT_MAP_RANK[r] != 0 {
-                        hand_lookup[s][r] = h as i32;
+                        suit_lookup[r] = h as i32;
                         break;
                     }
                 }
@@ -212,7 +212,7 @@ impl Engine {
             }
             self.rel[aggr as usize] = self.rel[(aggr ^ top_bit_rank) as usize];
 
-            let weight = (aggr as u32).count_ones() as usize;
+            let weight = aggr.count_ones() as usize;
             for c in (2..=weight).rev() {
                 for s in 0..DDS_SUITS {
                     let prev_hand = self.rel[aggr as usize].abs_rank[c - 1][s].hand;
@@ -221,8 +221,8 @@ impl Engine {
                     self.rel[aggr as usize].abs_rank[c][s].rank = prev_rank;
                 }
             }
-            for s in 0..DDS_SUITS {
-                self.rel[aggr as usize].abs_rank[1][s].hand = hand_lookup[s][top_bit_no];
+            for (s, suit_lookup) in hand_lookup.iter().enumerate() {
+                self.rel[aggr as usize].abs_rank[1][s].hand = suit_lookup[top_bit_no];
                 self.rel[aggr as usize].abs_rank[1][s].rank = top_bit_no as i32;
             }
         }
@@ -314,15 +314,13 @@ impl Engine {
         let first_hand = pos.first[depth_u];
         let trick = ((depth + 3) >> 2) as usize;
 
-        let data = self.moves.get_trick_data(((depth + 3) >> 2) as i32);
+        let data = self.moves.get_trick_data((depth + 3) >> 2);
 
         pos.first[depth_u - 1] = (first_hand + data.rel_winner) & 3;
 
         let h = ((first_hand + 3) & 3) as usize;
 
-        for suit in 0..DDS_SUITS {
-            trick_cards[suit] = 0;
-        }
+        trick_cards.fill(0);
         let ss = data.best_suit as usize;
         if data.play_count[ss] >= 2 {
             let rr = data.best_rank as usize;
@@ -438,9 +436,7 @@ impl Engine {
         let trump = self.trump;
         let first_hand = pos.first[0] as usize;
 
-        for s in 0..DDS_SUITS {
-            eval_win_ranks[s] = 0;
-        }
+        eval_win_ranks.fill(0);
 
         let mut hmax: usize = 0;
         let mut rmax: u16 = 0;
@@ -538,9 +534,7 @@ impl Engine {
             let mut ev_win = [0u16; DDS_SUITS];
             let value_tricks = self.evaluate(pos, &mut ev_win);
             let value = value_tricks >= target;
-            for ss in 0..DDS_SUITS {
-                pos.win_ranks[depth_u][ss] = ev_win[ss];
-            }
+            pos.win_ranks[depth_u].copy_from_slice(&ev_win);
             return value;
         }
 
@@ -917,15 +911,25 @@ impl Engine {
             }
 
             if value == success {
-                for ss in 0..DDS_SUITS {
-                    pos.win_ranks[depth_u][ss] = pos.win_ranks[depth_u - 1][ss] | make_win_rank[ss];
+                let (prev_rows, cur_rows) = pos.win_ranks.split_at_mut(depth_u);
+                for ((&prev, dst), &mwr) in prev_rows[depth_u - 1]
+                    .iter()
+                    .zip(cur_rows[0].iter_mut())
+                    .zip(make_win_rank.iter())
+                {
+                    *dst = prev | mwr;
                 }
                 chosen_move = mply;
                 cutoff = true;
                 break;
             }
-            for ss in 0..DDS_SUITS {
-                pos.win_ranks[depth_u][ss] |= pos.win_ranks[depth_u - 1][ss] | make_win_rank[ss];
+            let (prev_rows, cur_rows) = pos.win_ranks.split_at_mut(depth_u);
+            for ((&prev, dst), &mwr) in prev_rows[depth_u - 1]
+                .iter()
+                .zip(cur_rows[0].iter_mut())
+                .zip(make_win_rank.iter())
+            {
+                *dst |= prev | mwr;
             }
         }
         if cutoff {
