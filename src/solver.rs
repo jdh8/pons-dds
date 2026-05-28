@@ -203,6 +203,29 @@ impl Solver {
     }
 }
 
+impl Solver {
+    /// Diagnostic: total `(search_target_calls, bisection_iters)`
+    /// accumulated by this solver's engine since it was created or
+    /// [`Self::reset_bisection_stats`] was last called.
+    ///
+    /// `bisection_iters / search_target_calls` is the average number of
+    /// alpha-beta probes per bisection driver call — a value close to 1
+    /// means the TT carries bounds between probes; ≈ 4 means each probe
+    /// re-traverses the tree from scratch.
+    #[inline]
+    #[must_use]
+    pub const fn bisection_stats(&self) -> (u64, u64) {
+        (self.engine.search_target_calls, self.engine.bisection_iters)
+    }
+
+    /// Zero the bisection diagnostic counters.
+    #[inline]
+    pub const fn reset_bisection_stats(&mut self) {
+        self.engine.search_target_calls = 0;
+        self.engine.bisection_iters = 0;
+    }
+}
+
 impl Default for Solver {
     #[inline]
     fn default() -> Self {

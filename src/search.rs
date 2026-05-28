@@ -94,6 +94,15 @@ pub struct Engine {
     /// `Box`-allocated to keep the [`Engine`] struct small on the search
     /// stack.
     rel: Box<[RelRanks; 8192]>,
+
+    /// Diagnostic counters. Incremented only in the bisection driver
+    /// ([`Engine::search_target`]), not in the inner alpha-beta recursion,
+    /// so the cost is at most a handful of `+= 1` per `search_target` call.
+    /// Used to answer "how many alpha-beta probes does one bisection
+    /// actually need?" — i.e. whether the TT is carrying bounds between
+    /// successive target probes.
+    pub search_target_calls: u64,
+    pub bisection_iters: u64,
 }
 
 impl Engine {
@@ -121,6 +130,8 @@ impl Engine {
                 .into_boxed_slice()
                 .try_into()
                 .unwrap_or_else(|_| unreachable!()),
+            search_target_calls: 0,
+            bisection_iters: 0,
         }
     }
 
@@ -648,14 +659,7 @@ impl Engine {
                 u32::from(pos.aggr[2]),
                 u32::from(pos.aggr[3]),
             ];
-            tt.add(
-                tricks,
-                hand,
-                &aggr_u32,
-                pos.win_ranks[depth_u],
-                first,
-                flag,
-            );
+            tt.add(tricks, hand, &aggr_u32, pos.win_ranks[depth_u], first, flag);
         }
 
         value
@@ -942,6 +946,7 @@ impl Engine {
         tt: &mut TransTable,
         ini_depth: i32,
     ) -> i32 {
+        self.search_target_calls += 1;
         self.ini_depth = ini_depth;
 
         // Edge case: literally no cards in play. The vendor's
@@ -949,7 +954,11 @@ impl Engine {
         // `LastTrickWinner` before ever calling `ABsearch`; do the same
         // here so `Evaluate` isn't asked to inspect an empty hand.
         let total_cards: i32 = (0..DDS_HANDS)
-            .map(|h| (0..DDS_SUITS).map(|s| i32::from(pos.length[h][s])).sum::<i32>())
+            .map(|h| {
+                (0..DDS_SUITS)
+                    .map(|s| i32::from(pos.length[h][s]))
+                    .sum::<i32>()
+            })
             .sum();
         if total_cards == 0 {
             return 0;
@@ -970,6 +979,7 @@ impl Engine {
         }
 
         while lowerbound < upperbound {
+            self.bisection_iters += 1;
             let target = (lowerbound + upperbound + 1) / 2;
             self.reset_best_moves();
             let val = self.ab_search_0(pos, tt, target, ini_depth);
@@ -1013,11 +1023,7 @@ mod tests {
 
     /// Total number of cards held (across all hands and suits).
     fn card_count(p: &Pos) -> i32 {
-        p.length
-            .iter()
-            .flatten()
-            .map(|&n| i32::from(n))
-            .sum()
+        p.length.iter().flatten().map(|&n| i32::from(n)).sum()
     }
 
     #[test]
