@@ -284,9 +284,6 @@ mod tests {
     /// (`0x1FFF`) for one hand and zero for the other three.
     #[test]
     fn pos_from_deal_each_hand_one_suit() {
-        let deal = each_hand_holds_one_suit_deal();
-        let pos = pos_from_deal(&deal);
-
         // contract_bridge → DDS suit mapping reminder:
         //   Suit::Clubs (0)    -> DDS suit 3
         //   Suit::Diamonds (1) -> DDS suit 2
@@ -296,6 +293,9 @@ mod tests {
         // DDS bit layout: rank `r` at bit `r-2`, so `Holding::ALL`
         // (0x7FFC, bits 2..=14) shifts to 0x1FFF (bits 0..=12).
         const DDS_ALL: u16 = 0x1FFF;
+
+        let deal = each_hand_holds_one_suit_deal();
+        let pos = pos_from_deal(&deal);
 
         // N (hand 0) holds spades → DDS suit 0.
         assert_eq!(pos.rank_in_suit[0][0], DDS_ALL);

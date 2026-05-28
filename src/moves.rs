@@ -2196,14 +2196,14 @@ mod tests {
         // should be 0 (no cards missing).
         let mut p = Pos::default();
         // Give NORTH ranks 2..7, EAST 8..10, SOUTH J..K, WEST A.
-        for r in 2..=7 {
-            p.rank_in_suit[0][0] |= BIT_MAP_RANK[r];
+        for bits in &BIT_MAP_RANK[2..=7] {
+            p.rank_in_suit[0][0] |= bits;
         }
-        for r in 8..=10 {
-            p.rank_in_suit[1][0] |= BIT_MAP_RANK[r];
+        for bits in &BIT_MAP_RANK[8..=10] {
+            p.rank_in_suit[1][0] |= bits;
         }
-        for r in 11..=13 {
-            p.rank_in_suit[2][0] |= BIT_MAP_RANK[r];
+        for bits in &BIT_MAP_RANK[11..=13] {
+            p.rank_in_suit[2][0] |= bits;
         }
         p.rank_in_suit[3][0] |= BIT_MAP_RANK[14];
 

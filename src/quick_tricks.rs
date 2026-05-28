@@ -1292,7 +1292,7 @@ mod tests {
         );
     }
 
-    /// Second-hand variant: if depth == ini_depth, must return false
+    /// Second-hand variant: if `depth == ini_depth`, must return false
     /// without examining position.
     #[test]
     fn second_hand_at_ini_depth_returns_false() {

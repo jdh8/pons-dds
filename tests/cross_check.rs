@@ -78,6 +78,7 @@ fn to_dds_bridge_deal(deal: FullDeal) -> dds_bridge::FullDeal {
 }
 
 #[test]
+#[allow(clippy::significant_drop_tightening)] // hold the lock across the loop
 fn dds_rs_matches_ddss() {
     let deals = deals();
     let mut ours = dds_rs::Solver::new();
@@ -93,6 +94,7 @@ fn dds_rs_matches_ddss() {
 }
 
 #[test]
+#[allow(clippy::significant_drop_tightening)] // hold the lock across the loop
 fn dds_rs_matches_dds_bridge() {
     let deals = deals();
     let mut ours = dds_rs::Solver::new();

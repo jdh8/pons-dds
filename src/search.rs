@@ -996,14 +996,16 @@ mod tests {
     /// Build a partial `Pos` from per-hand suit bitmaps; the helper
     /// populates `aggr` and `length` automatically.
     fn build_pos(rank_in_suit: [[u16; 4]; 4]) -> Pos {
-        let mut p = Pos::default();
-        p.rank_in_suit = rank_in_suit;
-        for s in 0..4 {
-            p.aggr[s] = (0..4).fold(0u16, |a, h| a | rank_in_suit[h][s]);
+        let mut p = Pos {
+            rank_in_suit,
+            ..Pos::default()
+        };
+        for (s, aggr) in p.aggr.iter_mut().enumerate() {
+            *aggr = (0..4).fold(0u16, |a, h| a | rank_in_suit[h][s]);
         }
-        for h in 0..4 {
-            for s in 0..4 {
-                p.length[h][s] = rank_in_suit[h][s].count_ones() as u8;
+        for (h, length_row) in p.length.iter_mut().enumerate() {
+            for (s, length) in length_row.iter_mut().enumerate() {
+                *length = rank_in_suit[h][s].count_ones() as u8;
             }
         }
         p
@@ -1011,13 +1013,11 @@ mod tests {
 
     /// Total number of cards held (across all hands and suits).
     fn card_count(p: &Pos) -> i32 {
-        let mut c = 0;
-        for h in 0..4 {
-            for s in 0..4 {
-                c += p.length[h][s] as i32;
-            }
-        }
-        c
+        p.length
+            .iter()
+            .flatten()
+            .map(|&n| i32::from(n))
+            .sum()
     }
 
     #[test]

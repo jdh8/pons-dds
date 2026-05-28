@@ -354,9 +354,9 @@ mod tests {
     const NODE_TYPE: [i32; 4] = [MAXNODE, MINNODE, MAXNODE, MINNODE];
 
     /// A trivial "no winners" position. With every winner having
-    /// `hand = -1`, neither LaterTricksMIN nor LaterTricksMAX should
-    /// fire — the `Option` wrapper should return `None` and the search
-    /// must continue.
+    /// `hand = -1`, neither [`later_tricks_min`] nor [`later_tricks_max`]
+    /// should fire — the `Option` wrapper should return `None` and the
+    /// search must continue.
     #[test]
     fn no_winners_continues_search() {
         let mut pos = Pos::default();
@@ -378,14 +378,14 @@ mod tests {
         assert_eq!(result, None, "no winners → search must continue");
     }
 
-    /// LaterTricksMAX in NT: MIN owns the only suit winner (a single
-    /// stopper) and MAX can ride out the rest. Verify the heuristic
-    /// announces a forced claim.
+    /// [`later_tricks_max`] in NT: MIN owns the only suit winner (a
+    /// single stopper) and MAX can ride out the rest. Verify the
+    /// heuristic announces a forced claim.
     ///
     /// Construct:
     ///  - Suit 0: winner is MIN (hand 1, length 1). MIN's partner
     ///    (hand 3) also has length 1. So sum = max(1, 1) = 1.
-    ///  - tricks_max = 12, target = 13. With depth = 4 → depth>>2 = 1.
+    ///  - `tricks_max = 12`, target = 13. With depth = 4 → `depth>>2` = 1.
     ///    Check `tricks_max + 1 + 1 - 1 >= target` → 13 >= 13. Passes.
     ///    Also `tricks_max + 1 >= target` (the early-exit guard) — 13 >= 13.
     #[test]

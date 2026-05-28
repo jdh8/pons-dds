@@ -246,7 +246,7 @@ mod tests {
     #[test]
     fn count_table_matches_popcount() {
         for aggr in [0_usize, 1, 0x1fff, 0x1e00, 0xaaa] {
-            assert_eq!(COUNT_TABLE[aggr] as u32, (aggr as u32).count_ones());
+            assert_eq!(u32::from(COUNT_TABLE[aggr]), (aggr as u32).count_ones());
         }
     }
 
