@@ -100,7 +100,6 @@ pub(crate) struct TrickData {
     pub best_suit: i32,
     pub best_sequence: i32,
     pub rel_winner: i32,
-    pub next_lead_hand: i32,
 }
 
 /// Vendor's `extCard` — like [`MoveType`] but without a weight field.
@@ -169,6 +168,7 @@ impl Moves {
     }
 
     /// Returns the trump strain currently in effect.
+    #[allow(dead_code)]
     pub(crate) fn trump(&self) -> i32 {
         self.trump
     }
@@ -197,22 +197,26 @@ impl Moves {
     }
 
     /// Length of the candidate list for `(trick, rel_hand)`.
+    #[allow(dead_code)]
     pub(crate) fn get_length(&self, trick: i32, rel_hand: i32) -> i32 {
         self.move_list[trick as usize][rel_hand as usize].last + 1
     }
 
     /// Step the `current` cursor of `(tricks, rel_hand)` forward.
+    #[allow(dead_code)]
     pub(crate) fn step(&mut self, tricks: i32, rel_hand: i32) {
         self.move_list[tricks as usize][rel_hand as usize].current += 1;
     }
 
     /// Reset the `current` cursor of `(tricks, rel_hand)` to zero.
+    #[allow(dead_code)]
     pub(crate) fn rewind(&mut self, tricks: i32, rel_hand: i32) {
         self.move_list[tricks as usize][rel_hand as usize].current = 0;
     }
 
     /// Reward the last move returned from `(tricks, rel_hand)` by
     /// bumping its weight by 100. Mirrors `Moves::Reward`.
+    #[allow(dead_code)]
     pub(crate) fn reward(&mut self, tricks: i32, rel_hand: i32) {
         let mp = &mut self.move_list[tricks as usize][rel_hand as usize];
         let idx = (mp.current - 1) as usize;
@@ -517,6 +521,7 @@ impl Moves {
 
     /// `MakeNextSimple` from the vendor — like [`Moves::make_next`] but
     /// without the `winRanks` low-rank filtering.
+    #[allow(dead_code)]
     pub(crate) fn make_next_simple(&mut self, trick: i32, rel_hand: i32) -> Option<MoveType> {
         let trick_usize = trick as usize;
         let hand_usize = rel_hand as usize;
@@ -597,6 +602,7 @@ impl Moves {
 
     /// Apply a specific predetermined move (no heuristic search). Used
     /// by the search to follow a user-specified card.
+    #[allow(dead_code)]
     pub(crate) fn make_specific(&mut self, mv: &MoveType, trick: i32, rel_hand: i32) {
         self.track_index = trick as usize;
         self.record_chosen_move(trick, rel_hand, mv);
@@ -611,9 +617,9 @@ impl Moves {
         let list = &mut self.move_list[tricks as usize][rel_hand as usize];
         // Match the vendor's loop bound: it iterates k=1..=13, so the
         // first slot is skipped. We replicate that exactly here.
-        for k in 1..forbidden_moves.len().min(14) {
-            let s = forbidden_moves[k].suit;
-            let rank = forbidden_moves[k].rank;
+        for mv in &forbidden_moves[1..forbidden_moves.len().min(14)] {
+            let s = mv.suit;
+            let rank = mv.rank;
             if rank == 0 {
                 continue;
             }
@@ -646,6 +652,7 @@ impl Moves {
 
     /// Sort `(tricks, rel_hand)`'s candidate list in descending weight
     /// order — the vendor's `Sort`.
+    #[allow(dead_code)]
     pub(crate) fn sort(&mut self, tricks: i32, rel_hand: i32) {
         let trick_usize = tricks as usize;
         let hand_usize = rel_hand as usize;
@@ -655,6 +662,7 @@ impl Moves {
     }
 
     /// Public `MergeSort` wrapper as required by the spec.
+    #[allow(dead_code)]
     pub(crate) fn merge_sort(&mut self) {
         let trick_usize = self.curr_trick as usize;
         // Without a tracked "current rel-hand", we sort the list that
@@ -670,6 +678,7 @@ impl Moves {
 
     /// Returns true if the winning side of `mvp1` beats `mvp2` under
     /// `our_trump`. Pure helper; mirrors vendor's `WinningMove`.
+    #[allow(dead_code)]
     pub(crate) fn winning_move(mvp1: &MoveType, mvp2: &ExtCard, our_trump: i32) -> bool {
         if mvp1.suit == mvp2.suit {
             mvp1.rank > mvp2.rank
@@ -1012,11 +1021,9 @@ impl Moves {
                     }
                 } else if tpos.winner[suit].hand == lho_i as i32
                     && tpos.second_best[suit].hand == partner_i as i32
-                {
-                    if tpos.length[partner_i][suit] != 1 {
+                    && tpos.length[partner_i][suit] != 1 {
                         suit_weight_delta += 31;
                     }
-                }
 
                 let third_best_hand =
                     Self::third_best_hand_or_zero(thrp_rel, aggr, suit, partner_i, lead);
@@ -1081,27 +1088,27 @@ impl Moves {
         let hand_rel_usize = 1; // hand 1
         let _ = hand_rel_usize;
 
-        for k in 0..(self.num_moves as usize) {
-            let mply = &self.move_list[trick_usize][1].moves;
-            let cur_rank = mply[k].rank;
-            let cur_sequence = mply[k].sequence;
+        let n = self.num_moves as usize;
+        for mv in &mut self.move_list[trick_usize][1].moves[..n] {
+            let cur_rank = mv.rank;
+            let cur_sequence = mv.sequence;
             let r_rank = REL_RANK[aggr_lead][cur_rank as usize] as i32;
             let mut win_move = false;
 
             if self.lead_suit == trump {
-                if maxpd > move0_rank && maxpd > max3rd {
-                    win_move = true;
-                } else if cur_rank > move0_rank && cur_rank > max3rd {
+                if (maxpd > move0_rank && maxpd > max3rd)
+                    || (cur_rank > move0_rank && cur_rank > max3rd)
+                {
                     win_move = true;
                 }
             } else {
                 if cur_rank > move0_rank && cur_rank > max3rd {
-                    if max3rd != 0 || tpos.length[partner_i][trump as usize] == 0 {
-                        win_move = true;
-                    } else if maxpd == 0
-                        && tpos.length[rho_i][trump as usize] != 0
-                        && tpos.rank_in_suit[rho_i][trump as usize]
-                            > tpos.rank_in_suit[partner_i][trump as usize]
+                    if max3rd != 0
+                        || tpos.length[partner_i][trump as usize] == 0
+                        || (maxpd == 0
+                            && tpos.length[rho_i][trump as usize] != 0
+                            && tpos.rank_in_suit[rho_i][trump as usize]
+                                > tpos.rank_in_suit[partner_i][trump as usize])
                     {
                         win_move = true;
                     }
@@ -1110,51 +1117,50 @@ impl Moves {
                         win_move = true;
                     }
                 } else if move0_rank > maxpd && move0_rank > max3rd && move0_rank > cur_rank {
-                    if maxpd == 0 && tpos.length[rho_i][trump as usize] != 0 {
-                        if max3rd != 0 || tpos.length[partner_i][trump as usize] == 0 {
-                            win_move = true;
-                        } else if tpos.rank_in_suit[rho_i][trump as usize]
-                            > tpos.rank_in_suit[partner_i][trump as usize]
-                        {
-                            win_move = true;
-                        }
+                    if maxpd == 0
+                        && tpos.length[rho_i][trump as usize] != 0
+                        && (max3rd != 0
+                            || tpos.length[partner_i][trump as usize] == 0
+                            || tpos.rank_in_suit[rho_i][trump as usize]
+                                > tpos.rank_in_suit[partner_i][trump as usize])
+                    {
+                        win_move = true;
                     }
                 } else if maxpd == 0 && tpos.length[rho_i][trump as usize] != 0 {
                     win_move = true;
                 }
             }
 
-            let mply = &mut self.move_list[trick_usize][1].moves;
             if win_move {
                 if min3rd > cur_rank {
-                    mply[k].weight = 40 + r_rank;
+                    mv.weight = 40 + r_rank;
                 } else if maxpd > move0_rank
                     && tpos.rank_in_suit[lead][lead_suit] > tpos.rank_in_suit[rho_i][lead_suit]
                 {
-                    mply[k].weight = 41 + r_rank;
+                    mv.weight = 41 + r_rank;
                 } else if cur_rank > move0_rank {
                     if cur_rank < maxpd {
-                        mply[k].weight = 78 - cur_rank;
+                        mv.weight = 78 - cur_rank;
                     } else if cur_rank > max3rd {
-                        mply[k].weight = 73 - cur_rank;
+                        mv.weight = 73 - cur_rank;
                     } else if cur_sequence != 0 {
-                        mply[k].weight = 62 - cur_rank;
+                        mv.weight = 62 - cur_rank;
                     } else {
-                        mply[k].weight = 49 - cur_rank;
+                        mv.weight = 49 - cur_rank;
                     }
                 } else if maxpd > 0 {
-                    mply[k].weight = 47 - cur_rank;
+                    mv.weight = 47 - cur_rank;
                 } else {
-                    mply[k].weight = 40 - cur_rank;
+                    mv.weight = 40 - cur_rank;
                 }
             } else if cur_rank < min3rd || cur_rank < minpd {
-                mply[k].weight = -9 + r_rank;
+                mv.weight = -9 + r_rank;
             } else if cur_rank < move0_rank {
-                mply[k].weight = -16 + r_rank;
+                mv.weight = -16 + r_rank;
             } else if cur_sequence != 0 {
-                mply[k].weight = 22 - cur_rank;
+                mv.weight = 22 - cur_rank;
             } else {
-                mply[k].weight = 10 - cur_rank;
+                mv.weight = 10 - cur_rank;
             }
         }
     }
@@ -1170,10 +1176,11 @@ impl Moves {
         let maxpd = HIGHEST_RANK[tpos.rank_in_suit[rho_i][lead_suit] as usize] as i32;
         let move0_rank = self.track[self.track_index].move_played[0].rank;
 
+        let n = self.num_moves as usize;
         if maxpd > move0_rank && maxpd > max3rd {
             let mply = &mut self.move_list[trick_usize][1].moves;
-            for k in 0..(self.num_moves as usize) {
-                mply[k].weight = -mply[k].rank;
+            for mv in &mut mply[..n] {
+                mv.weight = -mv.rank;
             }
         } else {
             let min3rd = LOWEST_RANK[tpos.rank_in_suit[partner_i][lead_suit] as usize] as i32;
@@ -1181,20 +1188,20 @@ impl Moves {
             let aggr_lead = tpos.aggr[lead_suit] as usize;
 
             let mply = &mut self.move_list[trick_usize][1].moves;
-            for k in 0..(self.num_moves as usize) {
-                let r_rank = REL_RANK[aggr_lead][mply[k].rank as usize] as i32;
-                let cur_rank = mply[k].rank;
-                let cur_sequence = mply[k].sequence;
+            for mv in &mut mply[..n] {
+                let cur_rank = mv.rank;
+                let cur_sequence = mv.sequence;
+                let r_rank = REL_RANK[aggr_lead][cur_rank as usize] as i32;
                 if cur_rank > move0_rank && cur_rank > max3rd {
-                    mply[k].weight = 81 - cur_rank;
+                    mv.weight = 81 - cur_rank;
                 } else if min3rd > cur_rank || minpd > cur_rank {
-                    mply[k].weight = -3 + r_rank;
+                    mv.weight = -3 + r_rank;
                 } else if cur_rank < move0_rank {
-                    mply[k].weight = -11 + r_rank;
+                    mv.weight = -11 + r_rank;
                 } else if cur_sequence != 0 {
-                    mply[k].weight = 10 + r_rank;
+                    mv.weight = 10 + r_rank;
                 } else {
-                    mply[k].weight = 13 - cur_rank;
+                    mv.weight = 13 - cur_rank;
                 }
             }
         }
@@ -1215,66 +1222,63 @@ impl Moves {
         let suit_count_lo = suit_count << 6;
         let move0_rank = self.track[self.track_index].move_played[0].rank;
 
+        let lo = self.last_num_moves as usize;
+        let n = self.num_moves as usize;
         if self.lead_suit == trump as i32 {
             // We pitch.
-            let suit_add: i32;
-            if tpos.rank_in_suit[rho_i][lead_suit]
+            let suit_add = if tpos.rank_in_suit[rho_i][lead_suit]
                 > (tpos.rank_in_suit[partner_i][lead_suit] | BIT_MAP_RANK[move0_rank as usize])
             {
-                suit_add = suit_count_lo / 44;
+                suit_count_lo / 44
             } else {
                 let mut add = suit_count_lo / 36;
                 if suit_count == 2 && tpos.second_best[suit].hand == curr_hand as i32 {
                     add += -4;
                 }
-                suit_add = add;
-            }
+                add
+            };
             let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-            for k in (self.last_num_moves as usize)..(self.num_moves as usize) {
-                mply[k].weight = -mply[k].rank + suit_add;
+            for mv in &mut mply[lo..n] {
+                mv.weight = -mv.rank + suit_add;
             }
         } else if suit != trump {
             // We discard on a side suit.
-            let suit_add: i32;
-            if tpos.length[partner_i][lead_suit] != 0 {
+            let suit_add = if tpos.length[partner_i][lead_suit] != 0 {
                 if tpos.rank_in_suit[rho_i][lead_suit]
                     > (tpos.rank_in_suit[partner_i][lead_suit] | BIT_MAP_RANK[move0_rank as usize])
+                    || (tpos.length[rho_i][lead_suit] == 0 && tpos.length[rho_i][trump] != 0)
                 {
-                    suit_add = 60 + suit_count_lo / 44;
-                } else if tpos.length[rho_i][lead_suit] == 0 && tpos.length[rho_i][trump] != 0 {
-                    suit_add = 60 + suit_count_lo / 44;
+                    60 + suit_count_lo / 44
                 } else {
                     let mut add = -2 + suit_count_lo / 36;
                     if suit_count == 2 && tpos.second_best[suit].hand == curr_hand as i32 {
                         add += -4;
                     }
-                    suit_add = add;
+                    add
                 }
-            } else if tpos.length[rho_i][lead_suit] == 0
-                && tpos.rank_in_suit[rho_i][trump] > tpos.rank_in_suit[partner_i][trump]
+            } else if (tpos.length[rho_i][lead_suit] == 0
+                && tpos.rank_in_suit[rho_i][trump] > tpos.rank_in_suit[partner_i][trump])
+                || (tpos.length[partner_i][trump] == 0
+                    && tpos.rank_in_suit[rho_i][lead_suit] > BIT_MAP_RANK[move0_rank as usize])
             {
-                suit_add = 60 + suit_count_lo / 44;
-            } else if tpos.length[partner_i][trump] == 0
-                && tpos.rank_in_suit[rho_i][lead_suit] > BIT_MAP_RANK[move0_rank as usize]
-            {
-                suit_add = 60 + suit_count_lo / 44;
+                60 + suit_count_lo / 44
             } else {
                 let mut add = -2 + suit_count_lo / 36;
                 if suit_count == 2 && tpos.second_best[suit].hand == curr_hand as i32 {
                     add += -4;
                 }
-                suit_add = add;
-            }
+                add
+            };
             let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-            for k in (self.last_num_moves as usize)..(self.num_moves as usize) {
-                mply[k].weight = -mply[k].rank + suit_add;
+            for mv in &mut mply[lo..n] {
+                mv.weight = -mv.rank + suit_add;
             }
         } else if tpos.length[partner_i][lead_suit] != 0 {
             // 3rd hand follows suit while we ruff.
             let suit_add = suit_count_lo / 44;
             let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-            for k in (self.last_num_moves as usize)..(self.num_moves as usize) {
-                mply[k].weight = 24 - mply[k].rank + suit_add;
+            for mv in &mut mply[lo..n] {
+                mv.weight = 24 - mv.rank + suit_add;
             }
         } else if tpos.length[rho_i][lead_suit] == 0
             && tpos.length[rho_i][trump] != 0
@@ -1282,22 +1286,22 @@ impl Moves {
         {
             let suit_add = suit_count_lo / 44;
             let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-            for k in (self.last_num_moves as usize)..(self.num_moves as usize) {
-                mply[k].weight = 24 - mply[k].rank + suit_add;
+            for mv in &mut mply[lo..n] {
+                mv.weight = 24 - mv.rank + suit_add;
             }
         } else {
             let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-            for k in (self.last_num_moves as usize)..(self.num_moves as usize) {
-                let cur_rank = mply[k].rank;
+            for mv in &mut mply[lo..n] {
+                let cur_rank = mv.rank;
                 if BIT_MAP_RANK[cur_rank as usize] > tpos.rank_in_suit[partner_i][trump] {
                     let suit_add = suit_count_lo / 44;
-                    mply[k].weight = 24 - cur_rank + suit_add;
+                    mv.weight = 24 - cur_rank + suit_add;
                 } else {
                     let mut suit_add = suit_count_lo / 36;
                     if suit_count == 2 && tpos.second_best[suit].hand == curr_hand as i32 {
                         suit_add += -4;
                     }
-                    mply[k].weight = 15 - cur_rank + suit_add;
+                    mv.weight = 15 - cur_rank + suit_add;
                 }
             }
         }
@@ -1326,9 +1330,11 @@ impl Moves {
             } else if suit_count == 1 && tpos.winner[suit].hand == curr_hand as i32 {
                 suit_add += -3;
             }
+            let lo = self.last_num_moves as usize;
+            let n = self.num_moves as usize;
             let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-            for k in (self.last_num_moves as usize)..(self.num_moves as usize) {
-                mply[k].weight = -mply[k].rank + suit_add;
+            for mv in &mut mply[lo..n] {
+                mv.weight = -mv.rank + suit_add;
             }
         } else {
             let suit_count = tpos.length[curr_hand][suit] as i32;
@@ -1338,9 +1344,11 @@ impl Moves {
             } else if suit_count == 1 && tpos.winner[suit].hand == curr_hand as i32 {
                 suit_add += -8;
             }
+            let lo = self.last_num_moves as usize;
+            let n = self.num_moves as usize;
             let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-            for k in (self.last_num_moves as usize)..(self.num_moves as usize) {
-                mply[k].weight = -mply[k].rank + suit_add;
+            for mv in &mut mply[lo..n] {
+                mv.weight = -mv.rank + suit_add;
             }
         }
     }
@@ -1363,85 +1371,71 @@ impl Moves {
         let max3rd = self.move_list[trick_usize][hand_rel].moves[0].rank;
         let track = self.track[self.track_index];
 
+        let n = self.num_moves as usize;
         if self.lead_suit == trump {
-            if track.high[1] == 0 && track.move_played[0].rank > max4th {
+            if (track.high[1] == 0 && track.move_played[0].rank > max4th)
+                || max3rd < min4th
+                || max3rd < track.move_played[1].rank
+            {
                 let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-                for k in 0..(self.num_moves as usize) {
-                    mply[k].weight = -mply[k].rank;
+                for mv in &mut mply[..n] {
+                    mv.weight = -mv.rank;
                 }
-                return;
-            } else if max3rd < min4th || max3rd < track.move_played[1].rank {
-                let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-                for k in 0..(self.num_moves as usize) {
-                    mply[k].weight = -mply[k].rank;
-                }
-                return;
             } else if max3rd > max4th {
                 let mply = &mut self.move_list[trick_usize][hand_rel].moves;
                 let move1_rank = track.move_played[1].rank;
-                for k in 0..(self.num_moves as usize) {
-                    if mply[k].rank > max4th && mply[k].rank > move1_rank {
-                        mply[k].weight = 58 - mply[k].rank;
+                for mv in &mut mply[..n] {
+                    if mv.rank > max4th && mv.rank > move1_rank {
+                        mv.weight = 58 - mv.rank;
                     } else {
-                        mply[k].weight = -mply[k].rank;
+                        mv.weight = -mv.rank;
                     }
                 }
             } else {
                 let k_bonus = self.rank_forces_ace(cards4th as i32);
                 let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-                for k in 0..(self.num_moves as usize) {
-                    mply[k].weight = -mply[k].rank;
+                for mv in &mut mply[..n] {
+                    mv.weight = -mv.rank;
                 }
                 if k_bonus != -1 {
                     mply[k_bonus as usize].weight += 20;
                 }
-                return;
             }
         } else if track.move_played[1].suit == trump {
             // 2nd hand ruffs, and we must follow suit.
             let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-            for k in 0..(self.num_moves as usize) {
-                mply[k].weight = -mply[k].rank;
+            for mv in &mut mply[..n] {
+                mv.weight = -mv.rank;
             }
-            return;
         } else if track.high[1] == 0 {
             // Partner is winning so far.
-            if max4th == 0 {
+            if max4th == 0
+                || track.move_played[0].rank > max4th
+                || max3rd < min4th
+                || max3rd < track.move_played[1].rank
+            {
                 let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-                for k in 0..(self.num_moves as usize) {
-                    mply[k].weight = -mply[k].rank;
+                for mv in &mut mply[..n] {
+                    mv.weight = -mv.rank;
                 }
-                return;
-            } else if track.move_played[0].rank > max4th {
-                let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-                for k in 0..(self.num_moves as usize) {
-                    mply[k].weight = -mply[k].rank;
-                }
-                return;
-            } else if max3rd < min4th || max3rd < track.move_played[1].rank {
-                let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-                for k in 0..(self.num_moves as usize) {
-                    mply[k].weight = -mply[k].rank;
-                }
-                return;
             } else if max3rd > max4th {
                 let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-                for k in 0..(self.num_moves as usize) {
-                    if mply[k].rank > max4th {
-                        mply[k].weight = 58 - mply[k].rank;
+                for mv in &mut mply[..n] {
+                    if mv.rank > max4th {
+                        mv.weight = 58 - mv.rank;
                     } else {
-                        mply[k].weight = -mply[k].rank;
+                        mv.weight = -mv.rank;
                     }
                 }
             } else {
                 let k_bonus = self.rank_forces_ace(cards4th as i32);
                 let mply = &mut self.move_list[trick_usize][hand_rel].moves;
                 let move1_rank = track.move_played[1].rank;
-                for k in 0..(self.num_moves as usize) {
-                    if mply[k].rank > move1_rank && mply[k].rank > max4th {
-                        mply[k].weight = 60 - mply[k].rank;
+                for mv in &mut mply[..n] {
+                    if mv.rank > move1_rank && mv.rank > max4th {
+                        mv.weight = 60 - mv.rank;
                     } else {
-                        mply[k].weight = -mply[k].rank;
+                        mv.weight = -mv.rank;
                     }
                 }
                 if k_bonus != -1 {
@@ -1453,28 +1447,28 @@ impl Moves {
             if max4th == 0 {
                 let mply = &mut self.move_list[trick_usize][hand_rel].moves;
                 let move1_rank = track.move_played[1].rank;
-                for k in 0..(self.num_moves as usize) {
-                    if mply[k].rank > move1_rank {
-                        mply[k].weight = 20 - mply[k].rank;
+                for mv in &mut mply[..n] {
+                    if mv.rank > move1_rank {
+                        mv.weight = 20 - mv.rank;
                     } else {
-                        mply[k].weight = -mply[k].rank;
+                        mv.weight = -mv.rank;
                     }
                 }
                 return;
             } else if max3rd < min4th || max3rd < track.move_played[1].rank {
                 let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-                for k in 0..(self.num_moves as usize) {
-                    mply[k].weight = -mply[k].rank;
+                for mv in &mut mply[..n] {
+                    mv.weight = -mv.rank;
                 }
                 return;
             } else if max3rd > max4th {
                 let mply = &mut self.move_list[trick_usize][hand_rel].moves;
                 let move1_rank = track.move_played[1].rank;
-                for k in 0..(self.num_moves as usize) {
-                    if mply[k].rank > move1_rank && mply[k].rank > max4th {
-                        mply[k].weight = 58 - mply[k].rank;
+                for mv in &mut mply[..n] {
+                    if mv.rank > move1_rank && mv.rank > max4th {
+                        mv.weight = 58 - mv.rank;
                     } else {
-                        mply[k].weight = -mply[k].rank;
+                        mv.weight = -mv.rank;
                     }
                 }
                 return;
@@ -1482,11 +1476,11 @@ impl Moves {
             let k_bonus = self.rank_forces_ace(cards4th as i32);
             let mply = &mut self.move_list[trick_usize][hand_rel].moves;
             let move1_rank = track.move_played[1].rank;
-            for k in 0..(self.num_moves as usize) {
-                if mply[k].rank > move1_rank && mply[k].rank > max4th {
-                    mply[k].weight = 60 - mply[k].rank;
+            for mv in &mut mply[..n] {
+                if mv.rank > move1_rank && mv.rank > max4th {
+                    mv.weight = 60 - mv.rank;
                 } else {
-                    mply[k].weight = -mply[k].rank;
+                    mv.weight = -mv.rank;
                 }
             }
             if k_bonus != -1 {
@@ -1581,10 +1575,11 @@ impl Moves {
         let max3rd = self.move_list[trick_usize][hand_rel].moves[0].rank;
         let track = self.track[self.track_index];
 
+        let n = self.num_moves as usize;
         if track.high[1] == 0 && track.move_played[0].rank > max4th {
             let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-            for k in 0..(self.num_moves as usize) {
-                mply[k].weight = -mply[k].rank;
+            for mv in &mut mply[..n] {
+                mv.weight = -mv.rank;
             }
             if tpos.length[lead][lead_suit] == 0 && tpos.winner[lead_suit].hand == curr_hand as i32
             {
@@ -1605,8 +1600,8 @@ impl Moves {
             return;
         } else if max3rd < min4th || max3rd < track.move_played[1].rank {
             let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-            for k in 0..(self.num_moves as usize) {
-                mply[k].weight = -mply[k].rank;
+            for mv in &mut mply[..n] {
+                mv.weight = -mv.rank;
             }
             return;
         }
@@ -1617,11 +1612,11 @@ impl Moves {
         }
         let mply = &mut self.move_list[trick_usize][hand_rel].moves;
         let move1_rank = track.move_played[1].rank;
-        for k in 0..(self.num_moves as usize) {
-            if mply[k].rank > move1_rank && mply[k].rank > max4th {
-                mply[k].weight = 60 - mply[k].rank;
+        for mv in &mut mply[..n] {
+            if mv.rank > move1_rank && mv.rank > max4th {
+                mv.weight = 60 - mv.rank;
             } else {
-                mply[k].weight = -mply[k].rank;
+                mv.weight = -mv.rank;
             }
         }
         if k_bonus != -1 {
@@ -1643,12 +1638,14 @@ impl Moves {
         let max4th = HIGHEST_RANK[tpos.rank_in_suit[rho_i][lead_suit] as usize] as i32;
         let track = self.track[self.track_index];
 
+        let lo = self.last_num_moves as usize;
+        let n = self.num_moves as usize;
         if self.lead_suit == trump as i32 || suit != trump {
             // Discard small from a long suit.
             let suit_add = (suit_count << 6) / 40;
             let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-            for k in (self.last_num_moves as usize)..(self.num_moves as usize) {
-                mply[k].weight = -mply[k].rank + suit_add;
+            for mv in &mut mply[lo..n] {
+                mv.weight = -mv.rank + suit_add;
             }
             return;
         } else if track.high[1] == 0
@@ -1657,44 +1654,44 @@ impl Moves {
         {
             // Partner already beat 2nd and 4th hands.
             let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-            for k in (self.last_num_moves as usize)..(self.num_moves as usize) {
-                mply[k].weight = -mply[k].rank - 50;
+            for mv in &mut mply[lo..n] {
+                mv.weight = -mv.rank - 50;
             }
             return;
         }
 
         let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-        for k in (self.last_num_moves as usize)..(self.num_moves as usize) {
-            let cur_rank = mply[k].rank;
+        for mv in &mut mply[lo..n] {
+            let cur_rank = mv.rank;
             if track.move_played[1].suit == trump as i32 && cur_rank < track.move_played[1].rank {
                 let r_rank = REL_RANK[tpos.aggr[suit] as usize][cur_rank as usize] as i32;
                 let suit_add = (suit_count << 6) / 40;
-                mply[k].weight = -32 + r_rank + suit_add;
+                mv.weight = -32 + r_rank + suit_add;
             } else if track.high[1] == 0 {
                 if max4th != 0 {
                     if tpos.second_best[lead_suit].hand == lead as i32 {
                         let suit_add = (suit_count << 6) / 50;
-                        mply[k].weight = 36 - cur_rank + suit_add;
+                        mv.weight = 36 - cur_rank + suit_add;
                     } else {
                         let suit_add = (suit_count << 6) / 50;
-                        mply[k].weight = 48 - cur_rank + suit_add;
+                        mv.weight = 48 - cur_rank + suit_add;
                     }
                 } else if BIT_MAP_RANK[cur_rank as usize] > tpos.rank_in_suit[rho_i][trump] {
                     let suit_add = (suit_count << 6) / 50;
-                    mply[k].weight = 48 - cur_rank + suit_add;
+                    mv.weight = 48 - cur_rank + suit_add;
                 } else {
                     let suit_add = (suit_count << 6) / 50;
-                    mply[k].weight = -12 - cur_rank + suit_add;
+                    mv.weight = -12 - cur_rank + suit_add;
                 }
             } else if max4th != 0 {
                 let suit_add = (suit_count << 6) / 50;
-                mply[k].weight = 72 - cur_rank + suit_add;
+                mv.weight = 72 - cur_rank + suit_add;
             } else if BIT_MAP_RANK[cur_rank as usize] > tpos.rank_in_suit[rho_i][trump] {
                 let suit_add = (suit_count << 6) / 50;
-                mply[k].weight = 48 - cur_rank + suit_add;
+                mv.weight = 48 - cur_rank + suit_add;
             } else {
                 let suit_add = (suit_count << 6) / 50;
-                mply[k].weight = 36 - cur_rank + suit_add;
+                mv.weight = 36 - cur_rank + suit_add;
             }
         }
     }
@@ -1707,15 +1704,17 @@ impl Moves {
 
         let suit_count = tpos.length[curr_hand][suit] as i32;
         let mut suit_add = (suit_count << 6) / 24;
-        if suit_count == 2 && tpos.second_best[suit].hand == curr_hand as i32 {
-            suit_add -= 4;
-        } else if suit_count == 1 && tpos.winner[suit].hand == curr_hand as i32 {
+        if (suit_count == 2 && tpos.second_best[suit].hand == curr_hand as i32)
+            || (suit_count == 1 && tpos.winner[suit].hand == curr_hand as i32)
+        {
             suit_add -= 4;
         }
 
+        let lo = self.last_num_moves as usize;
+        let n = self.num_moves as usize;
         let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-        for k in (self.last_num_moves as usize)..(self.num_moves as usize) {
-            mply[k].weight = -mply[k].rank + suit_add;
+        for mv in &mut mply[lo..n] {
+            mv.weight = -mv.rank + suit_add;
         }
     }
 
@@ -1730,19 +1729,20 @@ impl Moves {
         let hand_rel = 3usize;
         let track = self.track[self.track_index];
 
+        let n = self.num_moves as usize;
         if track.high[2] == 1 || (lead_suit != trump && track.move_played[2].suit == trump) {
             let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-            for k in 0..(self.num_moves as usize) {
-                mply[k].weight = -mply[k].rank;
+            for mv in &mut mply[..n] {
+                mv.weight = -mv.rank;
             }
         } else {
             let mply = &mut self.move_list[trick_usize][hand_rel].moves;
             let move2_rank = track.move_played[2].rank;
-            for k in 0..(self.num_moves as usize) {
-                if mply[k].rank > move2_rank {
-                    mply[k].weight = 30 - mply[k].rank;
+            for mv in &mut mply[..n] {
+                if mv.rank > move2_rank {
+                    mv.weight = 30 - mv.rank;
                 } else {
-                    mply[k].weight = -mply[k].rank;
+                    mv.weight = -mv.rank;
                 }
             }
         }
@@ -1751,7 +1751,7 @@ impl Moves {
     fn weight_alloc_trump_void3(&mut self, tpos: &Pos) {
         let curr_hand = self.curr_hand as usize;
         let suit = self.suit as usize;
-        let trump = self.trump as i32;
+        let trump = self.trump;
         let lead_suit = self.lead_suit;
         let trick_usize = self.curr_trick as usize;
         let hand_rel = 3usize;
@@ -1763,51 +1763,53 @@ impl Moves {
             val -= 2;
         }
 
+        let lo = self.last_num_moves as usize;
+        let n = self.num_moves as usize;
         if lead_suit == trump {
             let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-            for k in (self.last_num_moves as usize)..(self.num_moves as usize) {
-                mply[k].weight = -mply[k].rank + val;
+            for mv in &mut mply[lo..n] {
+                mv.weight = -mv.rank + val;
             }
         } else if track.high[2] == 1 {
             if suit == trump as usize {
                 let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-                for k in (self.last_num_moves as usize)..(self.num_moves as usize) {
-                    mply[k].weight = 2 - mply[k].rank + val;
+                for mv in &mut mply[lo..n] {
+                    mv.weight = 2 - mv.rank + val;
                 }
             } else {
                 let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-                for k in (self.last_num_moves as usize)..(self.num_moves as usize) {
-                    mply[k].weight = 25 - mply[k].rank + val;
+                for mv in &mut mply[lo..n] {
+                    mv.weight = 25 - mv.rank + val;
                 }
             }
         } else if track.move_played[2].suit == trump {
             if suit == trump as usize {
                 let mply = &mut self.move_list[trick_usize][hand_rel].moves;
                 let move2_rank = track.move_played[2].rank;
-                for k in (self.last_num_moves as usize)..(self.num_moves as usize) {
-                    let r_rank = REL_RANK[tpos.aggr[suit] as usize][mply[k].rank as usize] as i32;
-                    if mply[k].rank > move2_rank {
-                        mply[k].weight = 33 + r_rank;
+                for mv in &mut mply[lo..n] {
+                    let r_rank = REL_RANK[tpos.aggr[suit] as usize][mv.rank as usize] as i32;
+                    if mv.rank > move2_rank {
+                        mv.weight = 33 + r_rank;
                     } else {
-                        mply[k].weight = -13 + r_rank;
+                        mv.weight = -13 + r_rank;
                     }
                 }
             } else {
                 let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-                for k in (self.last_num_moves as usize)..(self.num_moves as usize) {
-                    mply[k].weight = 14 - mply[k].rank + val;
+                for mv in &mut mply[lo..n] {
+                    mv.weight = 14 - mv.rank + val;
                 }
             }
         } else if suit == trump as usize {
             let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-            for k in (self.last_num_moves as usize)..(self.num_moves as usize) {
-                let r_rank = REL_RANK[tpos.aggr[suit] as usize][mply[k].rank as usize] as i32;
-                mply[k].weight = 33 + r_rank;
+            for mv in &mut mply[lo..n] {
+                let r_rank = REL_RANK[tpos.aggr[suit] as usize][mv.rank as usize] as i32;
+                mv.weight = 33 + r_rank;
             }
         } else {
             let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-            for k in (self.last_num_moves as usize)..(self.num_moves as usize) {
-                mply[k].weight = 14 - mply[k].rank + val;
+            for mv in &mut mply[lo..n] {
+                mv.weight = 14 - mv.rank + val;
             }
         }
     }
@@ -1826,9 +1828,11 @@ impl Moves {
             val -= 8;
         }
 
+        let lo = self.last_num_moves as usize;
+        let n = self.num_moves as usize;
         let mply = &mut self.move_list[trick_usize][hand_rel].moves;
-        for k in (self.last_num_moves as usize)..(self.num_moves as usize) {
-            mply[k].weight = -mply[k].rank + val;
+        for mv in &mut mply[lo..n] {
+            mv.weight = -mv.rank + val;
         }
     }
 }
