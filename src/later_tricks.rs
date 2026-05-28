@@ -125,16 +125,17 @@ pub fn later_tricks_min(
             }
 
             let r2 = tpos.second_best[trump as usize].rank;
-            if node_type_store[hh as usize] == MINNODE && r2 != 0
+            if node_type_store[hh as usize] == MINNODE
+                && r2 != 0
                 && (tpos.length[hh as usize][trump as usize] > 1
                     || tpos.length[PARTNER[hh as usize]][trump as usize] > 1)
-                {
-                    for ss in 0..DDS_SUITS {
-                        tpos.win_ranks[depth_u][ss] = 0;
-                    }
-                    tpos.win_ranks[depth_u][trump as usize] = BIT_MAP_RANK[r2 as usize];
-                    return false;
+            {
+                for ss in 0..DDS_SUITS {
+                    tpos.win_ranks[depth_u][ss] = 0;
                 }
+                tpos.win_ranks[depth_u][trump as usize] = BIT_MAP_RANK[r2 as usize];
+                return false;
+            }
         }
     } else {
         // Not NT.
@@ -253,18 +254,19 @@ pub fn later_tricks_max(
                 return false;
             }
 
-            if node_type_store[hh as usize] == MAXNODE && tpos.second_best[trump as usize].rank != 0
+            if node_type_store[hh as usize] == MAXNODE
+                && tpos.second_best[trump as usize].rank != 0
                 && (tpos.length[hh as usize][trump as usize] > 1
                     || tpos.length[PARTNER[hh as usize]][trump as usize] > 1)
-                    && tpos.tricks_max + 2 >= target
-                {
-                    for ss in 0..DDS_SUITS {
-                        tpos.win_ranks[depth_u][ss] = 0;
-                    }
-                    tpos.win_ranks[depth_u][trump as usize] =
-                        BIT_MAP_RANK[tpos.second_best[trump as usize].rank as usize];
-                    return true;
+                && tpos.tricks_max + 2 >= target
+            {
+                for ss in 0..DDS_SUITS {
+                    tpos.win_ranks[depth_u][ss] = 0;
                 }
+                tpos.win_ranks[depth_u][trump as usize] =
+                    BIT_MAP_RANK[tpos.second_best[trump as usize].rank as usize];
+                return true;
+            }
         }
     } else {
         // trump != DDS_NOTRUMP.

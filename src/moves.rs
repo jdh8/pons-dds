@@ -801,8 +801,7 @@ impl Moves {
                 } else if (tpos.length[lho_i][suit] != 0
                     || tpos.rank_in_suit[partner_i][trump] > tpos.rank_in_suit[lho_i][trump])
                     && (tpos.length[rho_i][suit] != 0
-                        || tpos.rank_in_suit[partner_i][trump]
-                            > tpos.rank_in_suit[rho_i][trump])
+                        || tpos.rank_in_suit[partner_i][trump] > tpos.rank_in_suit[rho_i][trump])
                 {
                     win_move = true;
                 }
@@ -1024,9 +1023,10 @@ impl Moves {
                     }
                 } else if tpos.winner[suit].hand == lho_i as i32
                     && tpos.second_best[suit].hand == partner_i as i32
-                    && tpos.length[partner_i][suit] != 1 {
-                        suit_weight_delta += 31;
-                    }
+                    && tpos.length[partner_i][suit] != 1
+                {
+                    suit_weight_delta += 31;
+                }
 
                 let third_best_hand =
                     Self::third_best_hand_or_zero(thrp_rel, aggr, suit, partner_i, lead);

@@ -271,10 +271,10 @@ pub fn quick_tricks(
                 if sum >= cutoff {
                     return sum;
                 }
-            } else if suit != trump && lho_trump_ranks == 0 && rho_trump_ranks == 0
-                && sum >= cutoff {
-                    return sum;
-                }
+            } else if suit != trump && lho_trump_ranks == 0 && rho_trump_ranks == 0 && sum >= cutoff
+            {
+                return sum;
+            }
         }
 
         if comm_partner {
@@ -299,8 +299,7 @@ pub fn quick_tricks(
                     continue;
                 }
                 qtricks += count_part;
-                tpos.win_ranks[depth_u][comm_suit as usize] |=
-                    BIT_MAP_RANK[comm_rank as usize];
+                tpos.win_ranks[depth_u][comm_suit as usize] |= BIT_MAP_RANK[comm_rank as usize];
 
                 if qtricks >= cutoff {
                     return qtricks;
@@ -332,8 +331,7 @@ pub fn quick_tricks(
                     }
                 }
                 if sum >= cutoff {
-                    tpos.win_ranks[depth_u][comm_suit as usize] |=
-                        BIT_MAP_RANK[comm_rank as usize];
+                    tpos.win_ranks[depth_u][comm_suit as usize] |= BIT_MAP_RANK[comm_rank as usize];
                     return sum;
                 }
             } else if opps == 0 {
@@ -342,10 +340,13 @@ pub fn quick_tricks(
                     if sum >= cutoff {
                         return sum;
                     }
-                } else if suit != trump && lho_trump_ranks == 0 && rho_trump_ranks == 0
-                    && sum >= cutoff {
-                        return sum;
-                    }
+                } else if suit != trump
+                    && lho_trump_ranks == 0
+                    && rho_trump_ranks == 0
+                    && sum >= cutoff
+                {
+                    return sum;
+                }
             }
         }
 
@@ -501,100 +502,101 @@ pub fn quick_tricks(
                     && tpos.winner[suit_u].hand != PARTNER[hand_u] as i32
                     && tpos.winner[trump as usize].hand != hand
                     && tpos.winner[trump as usize].hand != PARTNER[hand_u] as i32))
-            && count_part == 0 && tpos.length[PARTNER[hand_u]][trump as usize] > 0 {
-                if (count_rho > 0 || tpos.length[RHO[hand_u]][trump as usize] == 0)
-                    && (count_lho > 0 || tpos.length[LHO[hand_u]][trump as usize] == 0)
+            && count_part == 0
+            && tpos.length[PARTNER[hand_u]][trump as usize] > 0
+        {
+            if (count_rho > 0 || tpos.length[RHO[hand_u]][trump as usize] == 0)
+                && (count_lho > 0 || tpos.length[LHO[hand_u]][trump as usize] == 0)
+            {
+                lowest_qtricks = 1;
+                if 1 >= cutoff {
+                    return 1;
+                }
+                suit += 1;
+                if trump != DDS_NOTRUMP && suit == trump {
+                    suit += 1;
+                }
+                if suit > 3 {
+                    break;
+                }
+                continue;
+            } else if count_rho == 0 && count_lho == 0 {
+                if (tpos.rank_in_suit[LHO[hand_u]][trump as usize]
+                    | tpos.rank_in_suit[RHO[hand_u]][trump as usize])
+                    < tpos.rank_in_suit[PARTNER[hand_u]][trump as usize]
                 {
                     lowest_qtricks = 1;
+
+                    let rr = i32::from(
+                        HIGHEST_RANK[tpos.rank_in_suit[PARTNER[hand_u]][trump as usize] as usize],
+                    );
+                    if rr != 0 {
+                        tpos.win_ranks[depth_u][trump as usize] |= BIT_MAP_RANK[rr as usize];
+                        if 1 >= cutoff {
+                            return 1;
+                        }
+                    }
+                }
+                suit += 1;
+                if trump != DDS_NOTRUMP && suit == trump {
+                    suit += 1;
+                }
+                if suit > 3 {
+                    break;
+                }
+                continue;
+            } else if count_lho == 0 {
+                if tpos.rank_in_suit[LHO[hand_u]][trump as usize]
+                    < tpos.rank_in_suit[PARTNER[hand_u]][trump as usize]
+                {
+                    lowest_qtricks = 1;
+                    for rr in (2..=14).rev() {
+                        if tpos.rank_in_suit[PARTNER[hand_u]][trump as usize] & BIT_MAP_RANK[rr]
+                            != 0
+                        {
+                            tpos.win_ranks[depth_u][trump as usize] |= BIT_MAP_RANK[rr];
+                            break;
+                        }
+                    }
                     if 1 >= cutoff {
                         return 1;
                     }
-                    suit += 1;
-                    if trump != DDS_NOTRUMP && suit == trump {
-                        suit += 1;
-                    }
-                    if suit > 3 {
-                        break;
-                    }
-                    continue;
-                } else if count_rho == 0 && count_lho == 0 {
-                    if (tpos.rank_in_suit[LHO[hand_u]][trump as usize]
-                        | tpos.rank_in_suit[RHO[hand_u]][trump as usize])
-                        < tpos.rank_in_suit[PARTNER[hand_u]][trump as usize]
-                    {
-                        lowest_qtricks = 1;
-
-                        let rr = i32::from(
-                            HIGHEST_RANK
-                                [tpos.rank_in_suit[PARTNER[hand_u]][trump as usize] as usize],
-                        );
-                        if rr != 0 {
-                            tpos.win_ranks[depth_u][trump as usize] |= BIT_MAP_RANK[rr as usize];
-                            if 1 >= cutoff {
-                                return 1;
-                            }
-                        }
-                    }
-                    suit += 1;
-                    if trump != DDS_NOTRUMP && suit == trump {
-                        suit += 1;
-                    }
-                    if suit > 3 {
-                        break;
-                    }
-                    continue;
-                } else if count_lho == 0 {
-                    if tpos.rank_in_suit[LHO[hand_u]][trump as usize]
-                        < tpos.rank_in_suit[PARTNER[hand_u]][trump as usize]
-                    {
-                        lowest_qtricks = 1;
-                        for rr in (2..=14).rev() {
-                            if tpos.rank_in_suit[PARTNER[hand_u]][trump as usize] & BIT_MAP_RANK[rr]
-                                != 0
-                            {
-                                tpos.win_ranks[depth_u][trump as usize] |= BIT_MAP_RANK[rr];
-                                break;
-                            }
-                        }
-                        if 1 >= cutoff {
-                            return 1;
-                        }
-                    }
-                    suit += 1;
-                    if trump != DDS_NOTRUMP && suit == trump {
-                        suit += 1;
-                    }
-                    if suit > 3 {
-                        break;
-                    }
-                    continue;
-                } else if count_rho == 0 {
-                    if tpos.rank_in_suit[RHO[hand_u]][trump as usize]
-                        < tpos.rank_in_suit[PARTNER[hand_u]][trump as usize]
-                    {
-                        lowest_qtricks = 1;
-                        for rr in (2..=14).rev() {
-                            if tpos.rank_in_suit[PARTNER[hand_u]][trump as usize] & BIT_MAP_RANK[rr]
-                                != 0
-                            {
-                                tpos.win_ranks[depth_u][trump as usize] |= BIT_MAP_RANK[rr];
-                                break;
-                            }
-                        }
-                        if 1 >= cutoff {
-                            return 1;
-                        }
-                    }
-                    suit += 1;
-                    if trump != DDS_NOTRUMP && suit == trump {
-                        suit += 1;
-                    }
-                    if suit > 3 {
-                        break;
-                    }
-                    continue;
                 }
+                suit += 1;
+                if trump != DDS_NOTRUMP && suit == trump {
+                    suit += 1;
+                }
+                if suit > 3 {
+                    break;
+                }
+                continue;
+            } else if count_rho == 0 {
+                if tpos.rank_in_suit[RHO[hand_u]][trump as usize]
+                    < tpos.rank_in_suit[PARTNER[hand_u]][trump as usize]
+                {
+                    lowest_qtricks = 1;
+                    for rr in (2..=14).rev() {
+                        if tpos.rank_in_suit[PARTNER[hand_u]][trump as usize] & BIT_MAP_RANK[rr]
+                            != 0
+                        {
+                            tpos.win_ranks[depth_u][trump as usize] |= BIT_MAP_RANK[rr];
+                            break;
+                        }
+                    }
+                    if 1 >= cutoff {
+                        return 1;
+                    }
+                }
+                suit += 1;
+                if trump != DDS_NOTRUMP && suit == trump {
+                    suit += 1;
+                }
+                if suit > 3 {
+                    break;
+                }
+                continue;
             }
+        }
 
         if qtricks >= cutoff {
             return qtricks;
@@ -613,29 +615,28 @@ pub fn quick_tricks(
         }
     }
 
-    if qtricks == 0
-        && (trump == DDS_NOTRUMP || tpos.winner[trump as usize].hand == -1) {
-            for ss in 0..DDS_SUITS {
-                if tpos.winner[ss].hand == -1 {
-                    continue;
-                }
-                if tpos.length[hand_u][ss] > 0 {
-                    tpos.win_ranks[depth_u][ss] = BIT_MAP_RANK[tpos.winner[ss].rank as usize];
-                }
+    if qtricks == 0 && (trump == DDS_NOTRUMP || tpos.winner[trump as usize].hand == -1) {
+        for ss in 0..DDS_SUITS {
+            if tpos.winner[ss].hand == -1 {
+                continue;
             }
-
-            // Note: the vendor flips the cutoff calculation here (uses
-            // the OTHER node-type formula). Preserve that quirk.
-            cutoff = if node_type_store[hand_u] == MAXNODE {
-                tpos.tricks_max - target + (depth >> 2) + 2
-            } else {
-                target - tpos.tricks_max
-            };
-
-            if 1 >= cutoff {
-                return 0;
+            if tpos.length[hand_u][ss] > 0 {
+                tpos.win_ranks[depth_u][ss] = BIT_MAP_RANK[tpos.winner[ss].rank as usize];
             }
         }
+
+        // Note: the vendor flips the cutoff calculation here (uses
+        // the OTHER node-type formula). Preserve that quirk.
+        cutoff = if node_type_store[hand_u] == MAXNODE {
+            tpos.tricks_max - target + (depth >> 2) + 2
+        } else {
+            target - tpos.tricks_max
+        };
+
+        if 1 >= cutoff {
+            return 0;
+        }
+    }
 
     *result = false;
     qtricks

@@ -388,10 +388,8 @@ impl TransTable {
 
             self.aggr[ind] = self.aggr[ind ^ top_bit_rank];
 
-            for (rank_slot, suit_lookup) in self.aggr[ind]
-                .aggr_ranks
-                .iter_mut()
-                .zip(hand_lookup.iter())
+            for (rank_slot, suit_lookup) in
+                self.aggr[ind].aggr_ranks.iter_mut().zip(hand_lookup.iter())
             {
                 let h = suit_lookup[top_bit_no] as u32;
                 *rank_slot = (*rank_slot >> 2) | (h << 24);
@@ -766,13 +764,12 @@ impl TransTable {
             if (wp.top_set[1] ^ top_set[1]) & wp.top_mask[1] != 0 {
                 return None;
             }
-            if wp.last_mask_no != 2
-                && (wp.top_set[2] ^ top_set[2]) & wp.top_mask[2] != 0 {
-                    return None;
-                }
-                // Note: vendor never checks topMask4 in lookup. That's
-                // because lastMaskNo == 4 still doesn't gate further
-                // checks — once we got past 3 levels, the bounds rule.
+            if wp.last_mask_no != 2 && (wp.top_set[2] ^ top_set[2]) & wp.top_mask[2] != 0 {
+                return None;
+            }
+            // Note: vendor never checks topMask4 in lookup. That's
+            // because lastMaskNo == 4 still doesn't gate further
+            // checks — once we got past 3 levels, the bounds rule.
         }
         let n = &wp.first;
         if i32::from(n.lbound) > limit {

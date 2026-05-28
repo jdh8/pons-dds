@@ -40,7 +40,7 @@
     clippy::needless_pass_by_ref_mut,
     clippy::similar_names,
     clippy::too_many_lines,
-    clippy::unused_self,
+    clippy::unused_self
 )]
 
 pub(crate) mod later_tricks;
