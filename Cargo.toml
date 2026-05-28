@@ -1,0 +1,18 @@
+[package]
+name = "dds-rs"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+authors = ["Chen-Pang He (https://jdh8.org)"]
+description = "Pure-Rust double dummy solver for contract bridge"
+repository = "https://github.com/jdh8/dds-rs"
+license = "Apache-2.0"
+categories = ["game-development"]
+keywords = ["bridge", "double-dummy"]
+
+[dependencies]
+arrayvec = "0.7"
+bitflags = "2"
+contract-bridge = "0.1"
+rayon = "1"
+thiserror = "2"
