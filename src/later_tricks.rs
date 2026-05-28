@@ -51,6 +51,7 @@ fn abs_rank(rank_in_suit: &[[u16; 4]; 4], aggr: u16, k: usize, suit: usize) -> (
 /// Returns `false` to indicate that MIN can NOT reach `target` from
 /// this position (so the search can stop and report failure), `true` to
 /// indicate the search must continue.
+#[inline]
 pub(crate) fn later_tricks_min(
     tpos: &mut Pos,
     hand: i32,
@@ -181,6 +182,7 @@ pub(crate) fn later_tricks_min(
 /// Returns `true` to indicate that MAX can guarantee reaching `target`
 /// from this position (so the search can stop and report success),
 /// `false` to indicate the search must continue.
+#[inline]
 pub(crate) fn later_tricks_max(
     tpos: &mut Pos,
     hand: i32,

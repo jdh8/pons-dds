@@ -244,6 +244,7 @@ impl Moves {
     /// Generate candidate moves for the trick's leader.
     ///
     /// Returns the number of moves added to `moveList[tricks][0]`.
+    #[inline]
     pub(crate) fn move_gen_0(
         &mut self,
         tricks: i32,
@@ -319,6 +320,7 @@ impl Moves {
 
     /// Generate candidate moves for follower hands (1, 2 or 3 in
     /// trick-order). Returns the number of moves added.
+    #[inline]
     pub(crate) fn move_gen_123(&mut self, tricks: i32, hand_rel: i32, tpos: &Pos) -> i32 {
         self.track_index = tricks as usize;
         let tidx = self.track_index;
@@ -421,6 +423,7 @@ impl Moves {
     }
 
     /// Vendor's `WeightList[findex]` dispatch table.
+    #[inline]
     fn dispatch_weight_alloc(&mut self, findex: i32, tpos: &Pos) {
         match findex {
             4 => self.weight_alloc_nt_notvoid1(tpos),
@@ -448,6 +451,7 @@ impl Moves {
     ///
     /// Updates `track[trick]` to record the chosen move and, when
     /// `rel_hand == 3`, propagates `removed_ranks` into the next trick.
+    #[inline]
     pub(crate) fn make_next(
         &mut self,
         trick: i32,
@@ -602,6 +606,7 @@ impl Moves {
     /// appears in `forbidden_moves`. The vendor iterates over a fixed
     /// 14-slot list starting at index 1; we accept a slice and skip
     /// entries whose rank is zero (sentinel for "no move").
+    #[inline]
     pub(crate) fn purge(&mut self, tricks: i32, rel_hand: i32, forbidden_moves: &[MoveType]) {
         let list = &mut self.move_list[tricks as usize][rel_hand as usize];
         // Match the vendor's loop bound: it iterates k=1..=13, so the

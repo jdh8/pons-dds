@@ -40,6 +40,7 @@ const DDS_HANDS: usize = 4;
 /// Replaces the vendor's `thrd.rel[aggr].absRank[k][suit]` lookup.
 /// Returns `(0, -1)` if no such card exists. `k` is 1-based: `k = 1` is
 /// the highest, `k = 2` the second-highest, etc.
+#[inline]
 fn abs_rank(rank_in_suit: &[[u16; 4]; 4], aggr: u16, k: usize, suit: usize) -> (i32, i32) {
     let mut count = 0usize;
     for r in (2i32..=14).rev() {
@@ -69,6 +70,7 @@ fn abs_rank(rank_in_suit: &[[u16; 4]; 4], aggr: u16, k: usize, suit: usize) -> (
 /// `node_type_store[h]` must be `MAXNODE` or `MINNODE` for each hand
 /// `h`; this is the per-deal MAX/MIN assignment from the vendor's
 /// `thrd.nodeTypeStore`.
+#[inline]
 pub(crate) fn quick_tricks(
     tpos: &mut Pos,
     hand: i32,
@@ -1079,6 +1081,7 @@ fn quick_tricks_partner_hand_nt(
 ///
 /// `ini_depth` is the search's initial depth (the recursion stops short
 /// of the actual initial position).
+#[inline]
 pub(crate) fn quick_tricks_second_hand(
     tpos: &mut Pos,
     hand: i32,

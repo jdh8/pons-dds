@@ -249,6 +249,7 @@ impl Engine {
     // ------------------------------------------------------------------
 
     /// Apply the leader's card to `pos`. Mirrors vendor `Make0`.
+    #[inline]
     fn make0(&mut self, pos: &mut Pos, depth: i32, mply: &MoveType) {
         let depth_u = depth as usize;
         let h = pos.first[depth_u] as usize;
@@ -265,6 +266,7 @@ impl Engine {
     }
 
     /// Apply hand 1's card. Mirrors vendor `Make1`.
+    #[inline]
     fn make1(&mut self, pos: &mut Pos, depth: i32, mply: &MoveType) {
         let depth_u = depth as usize;
         let first_hand = pos.first[depth_u];
@@ -281,6 +283,7 @@ impl Engine {
     }
 
     /// Apply hand 2's card. Mirrors vendor `Make2`.
+    #[inline]
     fn make2(&mut self, pos: &mut Pos, depth: i32, mply: &MoveType) {
         let depth_u = depth as usize;
         let first_hand = pos.first[depth_u];
@@ -299,6 +302,7 @@ impl Engine {
     /// Apply hand 3's card, finishing the trick. Mirrors vendor
     /// `Make3`. Writes `trick_cards[suit]` with the rank-bit(s) that
     /// just won (used by the caller to propagate `win_ranks`).
+    #[inline]
     fn make3(
         &mut self,
         pos: &mut Pos,
@@ -357,6 +361,7 @@ impl Engine {
     /// Undo a [`Engine::make3`] (i.e. restore the just-played leader's
     /// card and roll back `winner` / `second_best`). Mirrors vendor
     /// `Undo0`.
+    #[inline]
     fn undo0(&self, pos: &mut Pos, depth: i32, mply: &MoveType) {
         let depth_u = depth as usize;
         let trick = ((depth + 3) >> 2) as usize;
@@ -380,6 +385,7 @@ impl Engine {
     }
 
     /// Undo a [`Engine::make0`] (leader's card). Mirrors vendor `Undo1`.
+    #[inline]
     fn undo1(&self, pos: &mut Pos, depth: i32, mply: &MoveType) {
         let depth_u = depth as usize;
         let h = pos.first[depth_u] as usize;
@@ -393,6 +399,7 @@ impl Engine {
     }
 
     /// Undo a [`Engine::make1`]. Mirrors vendor `Undo2`.
+    #[inline]
     fn undo2(&self, pos: &mut Pos, depth: i32, mply: &MoveType) {
         let depth_u = depth as usize;
         let h = ((pos.first[depth_u] + 1) & 3) as usize;
@@ -406,6 +413,7 @@ impl Engine {
     }
 
     /// Undo a [`Engine::make2`]. Mirrors vendor `Undo3`.
+    #[inline]
     fn undo3(&self, pos: &mut Pos, depth: i32, mply: &MoveType) {
         let depth_u = depth as usize;
         let h = ((pos.first[depth_u] + 2) & 3) as usize;
@@ -425,6 +433,7 @@ impl Engine {
     /// Last-trick evaluation. Mirrors vendor `Evaluate`. Writes the
     /// resulting win-ranks into `eval_win_ranks` and returns the final
     /// trick count for the MAX side.
+    #[inline]
     fn evaluate(&self, pos: &Pos, eval_win_ranks: &mut [u16; DDS_SUITS]) -> i32 {
         let trump = self.trump;
         let first_hand = pos.first[0] as usize;
@@ -496,6 +505,7 @@ impl Engine {
     // ------------------------------------------------------------------
 
     /// Lead-hand AB search. Mirrors vendor `ABsearch0`.
+    #[inline]
     pub(crate) fn ab_search_0(
         &mut self,
         pos: &mut Pos,
@@ -664,6 +674,7 @@ impl Engine {
     /// Helper: do a TT lookup and, if successful, return the cached
     /// boolean outcome (and update `pos.win_ranks[depth]` /
     /// `best_move_tt[depth]`).
+    #[inline]
     fn tt_lookup(
         &mut self,
         pos: &mut Pos,
@@ -714,6 +725,7 @@ impl Engine {
     }
 
     /// Second-hand AB search. Mirrors vendor `ABsearch1`.
+    #[inline]
     pub(crate) fn ab_search_1(
         &mut self,
         pos: &mut Pos,
@@ -786,6 +798,7 @@ impl Engine {
     }
 
     /// Third-hand AB search. Mirrors vendor `ABsearch2`.
+    #[inline]
     pub(crate) fn ab_search_2(
         &mut self,
         pos: &mut Pos,
@@ -848,6 +861,7 @@ impl Engine {
     /// trick winner, increments `tricks_max` accordingly, and recurses
     /// into [`Engine::ab_search_0`] with the trick-winner as the new
     /// leader.
+    #[inline]
     pub(crate) fn ab_search_3(
         &mut self,
         pos: &mut Pos,
