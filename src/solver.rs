@@ -31,7 +31,7 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 /// Convert a `contract_bridge::Suit` (C=0..S=3) to the DDS internal
 /// suit index (S=0..C=3).
 #[inline]
-fn dds_suit_from_cb(suit: Suit) -> usize {
+const fn dds_suit_from_cb(suit: Suit) -> usize {
     3 - suit as usize
 }
 
@@ -40,10 +40,9 @@ fn dds_suit_from_cb(suit: Suit) -> usize {
 /// descending order as [`dds_suit_from_cb`].
 #[inline]
 fn dds_trump_from_strain(strain: Strain) -> i32 {
-    match strain.suit() {
-        Some(suit) => dds_suit_from_cb(suit) as i32,
-        None => DDS_NOTRUMP,
-    }
+    strain
+        .suit()
+        .map_or(DDS_NOTRUMP, |suit| dds_suit_from_cb(suit) as i32)
 }
 
 /// All five strains in [`TrickCountTable`] row order (Clubs, Diamonds,
@@ -155,12 +154,12 @@ impl Solver {
     /// declarer changes.
     #[must_use]
     pub fn solve_deal(&mut self, deal: FullDeal) -> TrickCountTable {
-        let mut table = TrickCountTable::default();
-
         // 13 tricks left → ini_depth = 48. The leader of trick 13 (the
         // opening lead) plays at depth `ini_depth`, then each follower
         // decrements depth by 1.
         const INI_DEPTH: i32 = 48;
+
+        let mut table = TrickCountTable::default();
 
         for (strain_idx, strain) in STRAINS.iter().enumerate() {
             let trump = dds_trump_from_strain(*strain);
