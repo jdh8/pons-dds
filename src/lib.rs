@@ -27,4 +27,5 @@ pub(crate) mod move_type;
 pub(crate) mod moves;
 pub(crate) mod pos;
 pub(crate) mod quick_tricks;
+pub(crate) mod search;
 pub(crate) mod tt;
