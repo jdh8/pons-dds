@@ -71,7 +71,7 @@ struct Winners {
 
 /// Per-search engine state. Owns [`Moves`], holds the per-deal `rel`
 /// table and the per-depth scratch arrays.
-pub(crate) struct Engine {
+pub struct Engine {
     pub moves: Moves,
     pub node_type_store: [i32; DDS_HANDS],
     pub ini_depth: i32,
@@ -129,13 +129,13 @@ impl Engine {
     /// usual conventions:
     /// * Declarer is N or S → `[MAX, MIN, MAX, MIN]`.
     /// * Declarer is E or W → `[MIN, MAX, MIN, MAX]`.
-    pub(crate) fn set_node_types(&mut self, node_type_store: [i32; DDS_HANDS]) {
+    pub(crate) const fn set_node_types(&mut self, node_type_store: [i32; DDS_HANDS]) {
         self.node_type_store = node_type_store;
     }
 
     /// Configure the [`Moves`] trump strain and the engine's cached
     /// copy. Use [`DDS_NOTRUMP`] for notrump.
-    pub(crate) fn set_trump(&mut self, trump: i32) {
+    pub(crate) const fn set_trump(&mut self, trump: i32) {
         self.trump = trump;
         self.moves.set_trump(trump);
     }
@@ -173,9 +173,9 @@ impl Engine {
             }
         }
         for h in 0..DDS_HANDS {
-            pos.hand_dist[h] = ((pos.length[h][0] as i32) << 8)
-                | ((pos.length[h][1] as i32) << 4)
-                | (pos.length[h][2] as i32);
+            pos.hand_dist[h] = (i32::from(pos.length[h][0]) << 8)
+                | (i32::from(pos.length[h][1]) << 4)
+                | i32::from(pos.length[h][2]);
         }
 
         // --- SetDealTables: handLookup + rel + tt.init ---
@@ -250,7 +250,7 @@ impl Engine {
 
     /// Apply the leader's card to `pos`. Mirrors vendor `Make0`.
     #[inline]
-    fn make0(&mut self, pos: &mut Pos, depth: i32, mply: &MoveType) {
+    const fn make0(&mut self, pos: &mut Pos, depth: i32, mply: &MoveType) {
         let depth_u = depth as usize;
         let h = pos.first[depth_u] as usize;
         let s = mply.suit as usize;
@@ -267,7 +267,7 @@ impl Engine {
 
     /// Apply hand 1's card. Mirrors vendor `Make1`.
     #[inline]
-    fn make1(&mut self, pos: &mut Pos, depth: i32, mply: &MoveType) {
+    const fn make1(&mut self, pos: &mut Pos, depth: i32, mply: &MoveType) {
         let depth_u = depth as usize;
         let first_hand = pos.first[depth_u];
         pos.first[depth_u - 1] = first_hand;
@@ -284,7 +284,7 @@ impl Engine {
 
     /// Apply hand 2's card. Mirrors vendor `Make2`.
     #[inline]
-    fn make2(&mut self, pos: &mut Pos, depth: i32, mply: &MoveType) {
+    const fn make2(&mut self, pos: &mut Pos, depth: i32, mply: &MoveType) {
         let depth_u = depth as usize;
         let first_hand = pos.first[depth_u];
         pos.first[depth_u - 1] = first_hand;
@@ -384,7 +384,7 @@ impl Engine {
 
     /// Undo a [`Engine::make0`] (leader's card). Mirrors vendor `Undo1`.
     #[inline]
-    fn undo1(&self, pos: &mut Pos, depth: i32, mply: &MoveType) {
+    const fn undo1(&self, pos: &mut Pos, depth: i32, mply: &MoveType) {
         let depth_u = depth as usize;
         let h = pos.first[depth_u] as usize;
         let s = mply.suit as usize;
@@ -398,7 +398,7 @@ impl Engine {
 
     /// Undo a [`Engine::make1`]. Mirrors vendor `Undo2`.
     #[inline]
-    fn undo2(&self, pos: &mut Pos, depth: i32, mply: &MoveType) {
+    const fn undo2(&self, pos: &mut Pos, depth: i32, mply: &MoveType) {
         let depth_u = depth as usize;
         let h = ((pos.first[depth_u] + 1) & 3) as usize;
         let s = mply.suit as usize;
@@ -412,7 +412,7 @@ impl Engine {
 
     /// Undo a [`Engine::make2`]. Mirrors vendor `Undo3`.
     #[inline]
-    fn undo3(&self, pos: &mut Pos, depth: i32, mply: &MoveType) {
+    const fn undo3(&self, pos: &mut Pos, depth: i32, mply: &MoveType) {
         let depth_u = depth as usize;
         let h = ((pos.first[depth_u] + 2) & 3) as usize;
         let s = mply.suit as usize;
@@ -459,9 +459,8 @@ impl Engine {
                 }
                 if self.node_type_store[hmax] == MAXNODE {
                     return pos.tricks_max + 1;
-                } else {
-                    return pos.tricks_max;
                 }
+                return pos.tricks_max;
             }
         }
 
@@ -595,10 +594,7 @@ impl Engine {
         loop {
             let win_arr = pos.win_ranks[depth_u];
             let mply = self.moves.make_next(tricks, 0, &win_arr);
-            let mply = match mply {
-                Some(m) => m,
-                None => break,
-            };
+            let Some(mply) = mply else { break };
 
             self.make0(pos, depth, &mply);
             value = self.ab_search_1(pos, tt, target, depth - 1);
@@ -647,16 +643,16 @@ impl Engine {
 
             // The TT API wants `aggr` as u32 and `win_ranks` as u16.
             let aggr_u32 = [
-                pos.aggr[0] as u32,
-                pos.aggr[1] as u32,
-                pos.aggr[2] as u32,
-                pos.aggr[3] as u32,
+                u32::from(pos.aggr[0]),
+                u32::from(pos.aggr[1]),
+                u32::from(pos.aggr[2]),
+                u32::from(pos.aggr[3]),
             ];
             tt.add(
                 tricks,
                 hand,
                 &aggr_u32,
-                &pos.win_ranks[depth_u],
+                pos.win_ranks[depth_u],
                 first,
                 flag,
             );
@@ -685,10 +681,10 @@ impl Engine {
             tricks - (target - pos.tricks_max - 1)
         };
         let aggr_u32 = [
-            pos.aggr[0] as u32,
-            pos.aggr[1] as u32,
-            pos.aggr[2] as u32,
-            pos.aggr[3] as u32,
+            u32::from(pos.aggr[0]),
+            u32::from(pos.aggr[1]),
+            u32::from(pos.aggr[2]),
+            u32::from(pos.aggr[3]),
         ];
         let mut lower_flag = false;
         let cards = tt.lookup(
@@ -700,8 +696,8 @@ impl Engine {
             &mut lower_flag,
         )?;
         let lw = cards.least_win;
-        let bm_suit = cards.best_move_suit as i32;
-        let bm_rank = cards.best_move_rank as i32;
+        let bm_suit = i32::from(cards.best_move_suit);
+        let bm_rank = i32::from(cards.best_move_rank);
 
         for ss in 0..DDS_SUITS {
             pos.win_ranks[depth_u][ss] = WIN_RANKS[pos.aggr[ss] as usize][lw[ss] as usize];
@@ -764,10 +760,7 @@ impl Engine {
         loop {
             let win_arr = pos.win_ranks[depth_u];
             let mply = self.moves.make_next(tricks, 1, &win_arr);
-            let mply = match mply {
-                Some(m) => m,
-                None => break,
-            };
+            let Some(mply) = mply else { break };
 
             self.make1(pos, depth, &mply);
             value = self.ab_search_2(pos, tt, target, depth - 1);
@@ -824,10 +817,7 @@ impl Engine {
         loop {
             let win_arr = pos.win_ranks[depth_u];
             let mply = self.moves.make_next(tricks, 2, &win_arr);
-            let mply = match mply {
-                Some(m) => m,
-                None => break,
-            };
+            let Some(mply) = mply else { break };
 
             self.make2(pos, depth, &mply);
             value = self.ab_search_3(pos, tt, target, depth - 1);
@@ -889,10 +879,7 @@ impl Engine {
         loop {
             let win_arr = pos.win_ranks[depth_u];
             let mply = self.moves.make_next(tricks, 3, &win_arr);
-            let mply = match mply {
-                Some(m) => m,
-                None => break,
-            };
+            let Some(mply) = mply else { break };
 
             self.make3(pos, &mut make_win_rank, depth, &mply);
 
@@ -962,7 +949,7 @@ impl Engine {
         // `LastTrickWinner` before ever calling `ABsearch`; do the same
         // here so `Evaluate` isn't asked to inspect an empty hand.
         let total_cards: i32 = (0..DDS_HANDS)
-            .map(|h| (0..DDS_SUITS).map(|s| pos.length[h][s] as i32).sum::<i32>())
+            .map(|h| (0..DDS_SUITS).map(|s| i32::from(pos.length[h][s])).sum::<i32>())
             .sum();
         if total_cards == 0 {
             return 0;

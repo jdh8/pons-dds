@@ -54,9 +54,9 @@ const TT_SUITS: usize = 4;
 const TT_HASH_BUCKETS: usize = 256;
 
 /// Default per-instance memory budget in MiB (matches `THREADMEM_LARGE_DEF_MB`).
-pub(crate) const DEFAULT_MEMORY_MB: u32 = 95;
+pub const DEFAULT_MEMORY_MB: u32 = 95;
 /// Maximum per-instance memory budget in MiB (matches `THREADMEM_LARGE_MAX_MB`).
-pub(crate) const MAX_MEMORY_MB: u32 = 160;
+pub const MAX_MEMORY_MB: u32 = 160;
 
 // ---------- Public types ---------------------------------------------
 
@@ -65,7 +65,7 @@ pub(crate) const MAX_MEMORY_MB: u32 = 160;
 ///
 /// Mirrors the vendor's `nodeCardsType`.
 #[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct NodeCards {
+pub struct NodeCards {
     /// Upper bound on tricks for MAX from this position.
     pub ubound: i8,
     /// Lower bound on tricks for MAX from this position.
@@ -103,7 +103,7 @@ struct WinMatch {
 }
 
 /// 125-entry list of matches sharing a `(trick, hand, hash, hand_dist)`
-/// tuple. Sized at ~6.5 KiB per block (BLOCKS_PER_ENTRY * sizeof(WinMatch)).
+/// tuple. Sized at ~6.5 KiB per block (`BLOCKS_PER_ENTRY` * sizeof(WinMatch)).
 #[derive(Clone, Copy, Debug)]
 struct WinBlock {
     /// One past the last index used during matching (filled in slot order).
@@ -126,7 +126,7 @@ impl WinBlock {
         }
     }
 
-    fn reset(&mut self) {
+    const fn reset(&mut self) {
         self.next_match_no = 0;
         self.next_write_no = 0;
         self.timestamp_read = 0;
@@ -187,15 +187,15 @@ type Page = Box<[WinBlock; BLOCKS_PER_PAGE]>;
 struct BlockId(u32);
 
 impl BlockId {
-    fn from_indices(page: u32, slot: u32) -> Self {
+    const fn from_indices(page: u32, slot: u32) -> Self {
         Self(page * BLOCKS_PER_PAGE as u32 + slot)
     }
 
-    fn page(self) -> u32 {
+    const fn page(self) -> u32 {
         self.0 / BLOCKS_PER_PAGE as u32
     }
 
-    fn slot(self) -> u32 {
+    const fn slot(self) -> u32 {
         self.0 % BLOCKS_PER_PAGE as u32
     }
 }
@@ -267,7 +267,7 @@ static MASK_BYTES: std::sync::LazyLock<Box<[[[u32; TT_BYTES]; TT_SUITS]; 8192]>>
 ///
 /// One instance per search context (vendor's `TransTableL`). Not
 /// `Send`/`Sync` — must be owned by a single search worker.
-pub(crate) struct TransTable {
+pub struct TransTable {
     // ---- Memory budget ----
     pages_default: u32,
     pages_maximum: u32,
@@ -342,7 +342,7 @@ impl TransTable {
         const WIN_BLOCK_BYTES: usize = std::mem::size_of::<WinBlock>();
         // block_mem (KiB) = BLOCKS_PER_PAGE * sizeof(WinBlock) / 1024
         let block_kib = (BLOCKS_PER_PAGE * WIN_BLOCK_BYTES) as f64 / 1024.0;
-        ((1024.0 * megabytes as f64) / block_kib) as u32
+        ((1024.0 * f64::from(megabytes)) / block_kib) as u32
     }
 
     /// Update the default memory budget. Doesn't immediately shrink the
@@ -544,10 +544,10 @@ impl TransTable {
     /// single 8-bit hash. Kept byte-identical to preserve cache hit rate.
     #[inline]
     fn hash8(hand_dist: &[i32; TT_HANDS]) -> usize {
-        let h = (hand_dist[0] as i64)
-            ^ ((hand_dist[1] as i64).wrapping_mul(5))
-            ^ ((hand_dist[2] as i64).wrapping_mul(25))
-            ^ ((hand_dist[3] as i64).wrapping_mul(125));
+        let h = i64::from(hand_dist[0])
+            ^ (i64::from(hand_dist[1]).wrapping_mul(5))
+            ^ (i64::from(hand_dist[2]).wrapping_mul(25))
+            ^ (i64::from(hand_dist[3]).wrapping_mul(125));
         let h = h as i32;
         ((h ^ (h >> 5)) & 0xff) as usize
     }
@@ -555,10 +555,10 @@ impl TransTable {
     /// Pack 4 `hand_dist` entries into a 48-bit key (rest zero).
     #[inline]
     fn suit_lengths_key(hand_dist: &[i32; TT_HANDS]) -> i64 {
-        ((hand_dist[0] as i64) << 36)
-            | ((hand_dist[1] as i64) << 24)
-            | ((hand_dist[2] as i64) << 12)
-            | (hand_dist[3] as i64)
+        (i64::from(hand_dist[0]) << 36)
+            | (i64::from(hand_dist[1]) << 24)
+            | (i64::from(hand_dist[2]) << 12)
+            | i64::from(hand_dist[3])
     }
 
     // ---- Lookup ----------------------------------------------------
@@ -775,10 +775,10 @@ impl TransTable {
                 // checks — once we got past 3 levels, the bounds rule.
         }
         let n = &wp.first;
-        if n.lbound as i32 > limit {
+        if i32::from(n.lbound) > limit {
             return Some(true);
         }
-        if (n.ubound as i32) <= limit {
+        if i32::from(n.ubound) <= limit {
             return Some(false);
         }
         None
@@ -798,15 +798,14 @@ impl TransTable {
         trick: i32,
         hand: i32,
         aggr_target: &[u32; TT_SUITS],
-        win_ranks: &[u16; TT_SUITS],
+        win_ranks: [u16; TT_SUITS],
         cards: NodeCards,
         lower_flag: bool,
     ) {
         let trick = trick as usize;
         let hand = hand as usize;
-        let block_id = match self.last_block_seen[trick][hand] {
-            Some(id) => id,
-            None => return, // memory was reset since last lookup → drop
+        let Some(block_id) = self.last_block_seen[trick][hand] else {
+            return; // memory was reset since last lookup → drop
         };
 
         // Build the winMatchType pattern from win_ranks + aggr_target.
@@ -823,7 +822,7 @@ impl TransTable {
         };
 
         for ss in 0..TT_SUITS {
-            let w = win_ranks[ss] as i32;
+            let w = i32::from(win_ranks[ss]);
             if w == 0 {
                 ab[ss] = self.aggr[0].aggr_bytes[ss];
                 mb[ss] = MASK_BYTES[0][ss];
@@ -991,7 +990,7 @@ mod tests {
         let first = tt.lookup(trick, hand, &aggr_target, &hand_dist, 5, &mut lf);
         assert!(first.is_none());
 
-        tt.add(trick, hand, &aggr_target, &win_ranks, cards, true);
+        tt.add(trick, hand, &aggr_target, win_ranks, cards, true);
 
         // Now look it up — should hit since lbound (9) > limit (5).
         let mut lf2 = false;
@@ -1034,7 +1033,7 @@ mod tests {
         // Add under hd_a.
         let mut lf = false;
         let _ = tt.lookup(trick, hand, &aggr_target, &hd_a, 5, &mut lf);
-        tt.add(trick, hand, &aggr_target, &win_ranks, cards, true);
+        tt.add(trick, hand, &aggr_target, win_ranks, cards, true);
 
         // Lookup under hd_a: hit.
         let mut lf = false;
@@ -1073,7 +1072,7 @@ mod tests {
             trick,
             hand,
             &aggr_target,
-            &win_ranks,
+            win_ranks,
             NodeCards {
                 ubound: 7,
                 lbound: 7,
@@ -1089,7 +1088,7 @@ mod tests {
             trick,
             hand,
             &aggr_target,
-            &win_ranks,
+            win_ranks,
             NodeCards {
                 ubound: 8,
                 lbound: 8,
@@ -1131,7 +1130,7 @@ mod tests {
             trick,
             hand,
             &aggr_target,
-            &win_ranks,
+            win_ranks,
             NodeCards {
                 ubound: 10,
                 lbound: 10,
@@ -1210,7 +1209,7 @@ mod tests {
             let hd = [i & 0xfff, (i * 2) & 0xfff, (i * 3) & 0xfff, (i * 5) & 0xfff];
             let mut lf = false;
             let _ = tt.lookup(5, 0, &aggr_target, &hd, 3, &mut lf);
-            tt.add(5, 0, &aggr_target, &win_ranks, cards, true);
+            tt.add(5, 0, &aggr_target, win_ranks, cards, true);
         }
         assert!(tt.pages.len() > initial_pages);
     }
