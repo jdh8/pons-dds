@@ -33,18 +33,6 @@ pub(crate) const BIT_MAP_RANK: [u16; 16] = [
     0x0400, 0x0800, 0x1000, 0x2000,
 ];
 
-// ---- Display constants (kept for compatibility / debug output) -----
-
-pub(crate) const CARD_RANK: [u8; 16] = [
-    b'x', b'x', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'T', b'J', b'Q', b'K', b'A', b'-',
-];
-
-/// 'S', 'H', 'D', 'C', 'N' (strains: clubs..notrump).
-pub(crate) const CARD_SUIT: [u8; 5] = [b'S', b'H', b'D', b'C', b'N'];
-
-/// 'N', 'E', 'S', 'W'.
-pub(crate) const CARD_HAND: [u8; 4] = [b'N', b'E', b'S', b'W'];
-
 // ---- 8192-entry precomputed tables --------------------------------
 //
 // The five large tables. Each is indexed by an "aggr" — a 13-bit
@@ -54,10 +42,10 @@ pub(crate) const CARD_HAND: [u8; 4] = [b'N', b'E', b'S', b'W'];
 /// bit set in `aggr`, or 0 if `aggr == 0`.
 pub(crate) static HIGHEST_RANK: LazyLock<[u8; 8192]> = LazyLock::new(|| {
     let mut t = [0u8; 8192];
-    for aggr in 1..8192 {
+    for (aggr, entry) in t.iter_mut().enumerate().skip(1) {
         for r in (2..=14).rev() {
             if (aggr as u16) & BIT_MAP_RANK[r] != 0 {
-                t[aggr] = r as u8;
+                *entry = r as u8;
                 break;
             }
         }
@@ -69,10 +57,10 @@ pub(crate) static HIGHEST_RANK: LazyLock<[u8; 8192]> = LazyLock::new(|| {
 /// lowest bit set.
 pub(crate) static LOWEST_RANK: LazyLock<[u8; 8192]> = LazyLock::new(|| {
     let mut t = [0u8; 8192];
-    for aggr in 1..8192 {
-        for r in 2..=14 {
-            if (aggr as u16) & BIT_MAP_RANK[r] != 0 {
-                t[aggr] = r as u8;
+    for (aggr, entry) in t.iter_mut().enumerate().skip(1) {
+        for (r, &bit) in BIT_MAP_RANK.iter().enumerate().skip(2).take(13) {
+            if (aggr as u16) & bit != 0 {
+                *entry = r as u8;
                 break;
             }
         }
@@ -86,8 +74,8 @@ pub(crate) static LOWEST_RANK: LazyLock<[u8; 8192]> = LazyLock::new(|| {
 /// loop and the table form preserves identical access patterns).
 pub(crate) static COUNT_TABLE: LazyLock<[u8; 8192]> = LazyLock::new(|| {
     let mut t = [0u8; 8192];
-    for aggr in 0..8192 {
-        t[aggr] = (aggr as u32).count_ones() as u8;
+    for (aggr, entry) in t.iter_mut().enumerate() {
+        *entry = (aggr as u32).count_ones() as u8;
     }
     t
 });
@@ -98,12 +86,12 @@ pub(crate) static COUNT_TABLE: LazyLock<[u8; 8192]> = LazyLock::new(|| {
 /// for that absolute rank isn't set in `aggr`.
 pub(crate) static REL_RANK: LazyLock<[[i8; 15]; 8192]> = LazyLock::new(|| {
     let mut t = [[0i8; 15]; 8192];
-    for aggr in 1..8192 {
+    for (aggr, row) in t.iter_mut().enumerate().skip(1) {
         let mut ord: i8 = 0;
         for r in (2..=14).rev() {
             if (aggr as u16) & BIT_MAP_RANK[r] != 0 {
                 ord += 1;
-                t[aggr][r] = ord;
+                row[r] = ord;
             }
         }
     }
@@ -114,8 +102,8 @@ pub(crate) static REL_RANK: LazyLock<[[i8; 15]; 8192]> = LazyLock::new(|| {
 /// highest cards present in `aggr`. `least_win == 0` is always zero.
 pub(crate) static WIN_RANKS: LazyLock<[[u16; 14]; 8192]> = LazyLock::new(|| {
     let mut t = [[0u16; 14]; 8192];
-    for aggr in 0..8192 {
-        for least_win in 1..14 {
+    for (aggr, row) in t.iter_mut().enumerate() {
+        for (least_win, slot) in row.iter_mut().enumerate().skip(1) {
             let mut res: u16 = 0;
             let mut next_bit_no = 1;
             for r in (2..=14).rev() {
@@ -128,7 +116,7 @@ pub(crate) static WIN_RANKS: LazyLock<[[u16; 14]; 8192]> = LazyLock::new(|| {
                     }
                 }
             }
-            t[aggr][least_win] = res;
+            *slot = res;
         }
     }
     t
