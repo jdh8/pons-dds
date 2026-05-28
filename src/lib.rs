@@ -21,6 +21,10 @@
 //! [`ddss-sys/vendor/src/ABsearch.cpp`](../../../ddss-sys/vendor/src/ABsearch.cpp)
 //! for the search, plus the supporting files documented per-module.
 
+pub(crate) mod later_tricks;
 pub(crate) mod lookup;
 pub(crate) mod move_type;
+pub(crate) mod moves;
 pub(crate) mod pos;
+pub(crate) mod quick_tricks;
+pub(crate) mod tt;
