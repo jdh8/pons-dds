@@ -16,3 +16,14 @@ bitflags = "2"
 contract-bridge = "0.1"
 rayon = "1"
 thiserror = "2"
+
+[dev-dependencies]
+contract-bridge = { version = "0.1", features = ["rand"] }
+criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
+dds-bridge = "0.19"
+ddss = "0.1"
+rand = "0.10"
+
+[[bench]]
+name = "solver"
+harness = false
