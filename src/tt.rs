@@ -347,12 +347,14 @@ impl TransTable {
 
     /// Update the default memory budget. Doesn't immediately shrink the
     /// pool — that happens at the next [`Self::reset`].
+    #[allow(dead_code)]
     pub(crate) fn set_memory_default(&mut self, megabytes: u32) {
         self.pages_default = Self::mb_to_pages(megabytes);
     }
 
     /// Update the maximum memory budget. Doesn't immediately shrink the
     /// pool. New allocations beyond the new ceiling will trigger a reset.
+    #[allow(dead_code)]
     pub(crate) fn set_memory_maximum(&mut self, megabytes: u32) {
         self.pages_maximum = Self::mb_to_pages(megabytes);
     }
@@ -386,9 +388,13 @@ impl TransTable {
 
             self.aggr[ind] = self.aggr[ind ^ top_bit_rank];
 
-            for s in 0..TT_SUITS {
-                let h = hand_lookup[s][top_bit_no] as u32;
-                self.aggr[ind].aggr_ranks[s] = (self.aggr[ind].aggr_ranks[s] >> 2) | (h << 24);
+            for (rank_slot, suit_lookup) in self.aggr[ind]
+                .aggr_ranks
+                .iter_mut()
+                .zip(hand_lookup.iter())
+            {
+                let h = suit_lookup[top_bit_no] as u32;
+                *rank_slot = (*rank_slot >> 2) | (h << 24);
             }
 
             let ar = self.aggr[ind].aggr_ranks;
@@ -711,8 +717,8 @@ impl TransTable {
         //     nextWriteNo), which is older but still valid until
         //     overwritten.
         let bp = self.block(block_id);
-        let n = (bp.next_write_no - 1) as i32;
-        let n2 = (bp.next_match_no - 1) as i32;
+        let n = bp.next_write_no - 1;
+        let n2 = bp.next_match_no - 1;
 
         // First loop: i from n down to 0.
         let mut found: Option<i32> = None;
@@ -760,14 +766,13 @@ impl TransTable {
             if (wp.top_set[1] ^ top_set[1]) & wp.top_mask[1] != 0 {
                 return None;
             }
-            if wp.last_mask_no != 2 {
-                if (wp.top_set[2] ^ top_set[2]) & wp.top_mask[2] != 0 {
+            if wp.last_mask_no != 2
+                && (wp.top_set[2] ^ top_set[2]) & wp.top_mask[2] != 0 {
                     return None;
                 }
                 // Note: vendor never checks topMask4 in lookup. That's
                 // because lastMaskNo == 4 still doesn't gate further
                 // checks — once we got past 3 levels, the bounds rule.
-            }
         }
         let n = &wp.first;
         if n.lbound as i32 > limit {
