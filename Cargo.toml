@@ -2,7 +2,7 @@
 name = "dds-rs"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 authors = ["Chen-Pang He (https://jdh8.org)"]
 description = "Pure-Rust double dummy solver for contract bridge"
 repository = "https://github.com/jdh8/dds-rs"
