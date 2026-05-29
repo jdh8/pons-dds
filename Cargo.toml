@@ -26,7 +26,7 @@ thiserror = "2"
 
 [dev-dependencies]
 contract-bridge = { version = "0.1", features = ["rand"] }
-criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
+criterion = { version = "0.8", features = ["html_reports"] }
 rand = "0.10"
 
 [[bench]]
