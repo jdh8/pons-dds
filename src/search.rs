@@ -42,6 +42,89 @@ use crate::tt::{NodeCards, TransTable};
 const DDS_SUITS: usize = 4;
 const DDS_HANDS: usize = 4;
 
+/// Run a profiling statement only when the `profiling` feature is on.
+///
+/// Without the feature the body is `#[cfg]`-stripped, so the counter
+/// bumps in the alpha-beta hot path compile to nothing — a normal
+/// release build pays no instrumentation cost.
+macro_rules! stat {
+    ($($body:tt)*) => {{
+        #[cfg(feature = "profiling")]
+        {
+            $($body)*
+        }
+    }};
+}
+
+/// Per-search instrumentation counters. All zero unless the crate is
+/// built with `--features profiling`. Two questions drive the layout —
+/// the same two that govern double-dummy speed:
+///
+/// 1. **TT hit rate** — how often does a transposition-table probe prune
+///    an entire subtree? (`tt_hits / tt_lookups`)
+/// 2. **Move ordering** — when a node beta-cuts, how early in the move
+///    list does the cutoff fire? Perfect ordering cuts on move 1.
+///
+/// The node-0 funnel additionally attributes *why* lead nodes return
+/// without entering the move loop (TT, trivial bounds, quick/later
+/// tricks, leaf evaluation).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SearchStats {
+    // ---- Node-0 (lead) early-exit funnel ----
+    /// Times [`Engine::ab_search_0`] was entered.
+    pub node0_entries: u64,
+    /// Returned via the `depth >= 20` TT probe.
+    pub exit_tt_early: u64,
+    /// Returned via the trivial `tricks_max` bound checks.
+    pub exit_trivial: u64,
+    /// Returned at the `depth == 0` leaf evaluation.
+    pub exit_leaf: u64,
+    /// Returned because `quick_tricks` was decisive.
+    pub exit_quick: u64,
+    /// Returned because `later_tricks_*` was decisive.
+    pub exit_later: u64,
+    /// Returned via the `depth < 20` TT probe.
+    pub exit_tt_late: u64,
+    /// Reached the move-generation + search loop.
+    pub reached_moveloop0: u64,
+
+    // ---- TT probe outcomes (both probe sites in node 0) ----
+    /// Total `tt_lookup` calls.
+    pub tt_lookups: u64,
+    /// `tt_lookup` calls that returned a usable bound.
+    pub tt_hits: u64,
+    /// `tt.add` stores from node 0.
+    pub tt_stores: u64,
+
+    // ---- Move ordering (all four node types) ----
+    /// Nodes whose move loop produced a beta/alpha cutoff.
+    pub cutoff_nodes: u64,
+    /// Nodes whose move loop ran to exhaustion without a cutoff.
+    pub allnode_nodes: u64,
+    /// Cutoffs that fired on the very first move tried.
+    pub cutoff_first: u64,
+    /// Sum of 1-based cutoff move indices (for the mean).
+    pub cutoff_index_sum: u64,
+    /// Histogram of 1-based cutoff index; the last bucket is "8+".
+    pub cutoff_hist: [u64; 8],
+}
+
+#[cfg(feature = "profiling")]
+impl SearchStats {
+    /// Record a beta/alpha cutoff that fired on the `move_index`-th move
+    /// (1-based).
+    #[inline]
+    fn note_cutoff(&mut self, move_index: u32) {
+        self.cutoff_nodes += 1;
+        self.cutoff_index_sum += u64::from(move_index);
+        if move_index == 1 {
+            self.cutoff_first += 1;
+        }
+        let bucket = (move_index.clamp(1, 8) - 1) as usize;
+        self.cutoff_hist[bucket] += 1;
+    }
+}
+
 /// Vendor's `handDelta` constant. Used to update `pos.hand_dist[h]`
 /// whenever a card is played or unplayed in suit `s`.
 const HAND_DELTA: [i32; DDS_SUITS] = [256, 16, 1, 0];
@@ -111,6 +194,11 @@ pub struct Engine {
     /// iter 1?" — diagnostic only, not a hot-path counter.
     pub iter1_nanos: u128,
     pub later_nanos: u128,
+
+    /// Per-node search instrumentation. Only mutated when the crate is
+    /// built with `--features profiling`; otherwise stays all-zero and
+    /// every bump site is `#[cfg]`-stripped (see [`stat!`]).
+    pub stats: SearchStats,
 }
 
 impl Engine {
@@ -142,6 +230,7 @@ impl Engine {
             bisection_iters: 0,
             iter1_nanos: 0,
             later_nanos: 0,
+            stats: SearchStats::default(),
         }
     }
 
@@ -535,17 +624,21 @@ impl Engine {
         let tricks = depth >> 2;
 
         pos.win_ranks[depth_u] = [0; DDS_SUITS];
+        stat!(self.stats.node0_entries += 1;);
 
         if depth >= 20 && (tricks as usize) < 12 {
             if let Some(value) = self.tt_lookup(pos, tt, target, depth, tricks, hand) {
+                stat!(self.stats.exit_tt_early += 1;);
                 return value;
             }
         }
 
         if pos.tricks_max >= target {
+            stat!(self.stats.exit_trivial += 1;);
             return true;
         }
         if pos.tricks_max + tricks + 1 < target {
+            stat!(self.stats.exit_trivial += 1;);
             return false;
         }
         if depth == 0 {
@@ -553,6 +646,7 @@ impl Engine {
             let value_tricks = self.evaluate(pos, &mut ev_win);
             let value = value_tricks >= target;
             pos.win_ranks[depth_u].copy_from_slice(&ev_win);
+            stat!(self.stats.exit_leaf += 1;);
             return value;
         }
 
@@ -571,16 +665,20 @@ impl Engine {
 
         if self.node_type_store[hand_u] == MAXNODE {
             if res {
+                stat!(self.stats.exit_quick += 1;);
                 return qtricks != 0;
             }
             if !later_tricks_min(pos, hand, depth, target, trump, &self.node_type_store) {
+                stat!(self.stats.exit_later += 1;);
                 return false;
             }
         } else {
             if res {
+                stat!(self.stats.exit_quick += 1;);
                 return qtricks == 0;
             }
             if later_tricks_max(pos, hand, depth, target, trump, &self.node_type_store) {
+                stat!(self.stats.exit_later += 1;);
                 return true;
             }
         }
@@ -588,6 +686,7 @@ impl Engine {
         // ----- TT lookup (depth < 20 path) -----------------------------------
         if depth < 20 && (tricks as usize) < 12 {
             if let Some(value) = self.tt_lookup(pos, tt, target, depth, tricks, hand) {
+                stat!(self.stats.exit_tt_late += 1;);
                 return value;
             }
         }
@@ -595,6 +694,7 @@ impl Engine {
         // ----- Movegen + loop ------------------------------------------------
         let success = self.node_type_store[hand_u] == MAXNODE;
         let mut value = !success;
+        stat!(self.stats.reached_moveloop0 += 1;);
 
         self.lowest_win[depth_u] = [0; DDS_SUITS];
         let bm = self.best_move[depth_u];
@@ -606,10 +706,13 @@ impl Engine {
 
         let mut chosen_move = MoveType::default();
         let mut cutoff = false;
+        #[cfg(feature = "profiling")]
+        let mut move_index = 0u32;
         loop {
             let win_arr = pos.win_ranks[depth_u];
             let mply = self.moves.make_next(tricks, 0, &win_arr);
             let Some(mply) = mply else { break };
+            stat!(move_index += 1;);
 
             self.make0(pos, depth, &mply);
             value = self.ab_search_1(pos, tt, target, depth - 1);
@@ -630,6 +733,12 @@ impl Engine {
 
         if cutoff {
             self.best_move[depth_u] = chosen_move;
+        }
+        #[cfg(feature = "profiling")]
+        if cutoff {
+            self.stats.note_cutoff(move_index);
+        } else {
+            self.stats.allnode_nodes += 1;
         }
 
         // ----- TT store ------------------------------------------------------
@@ -664,6 +773,7 @@ impl Engine {
                 u32::from(pos.aggr[3]),
             ];
             tt.add(tricks, hand, &aggr_u32, pos.win_ranks[depth_u], first, flag);
+            stat!(self.stats.tt_stores += 1;);
         }
 
         value
@@ -695,6 +805,7 @@ impl Engine {
             u32::from(pos.aggr[3]),
         ];
         let mut lower_flag = false;
+        stat!(self.stats.tt_lookups += 1;);
         let cards = tt.lookup(
             tricks,
             hand,
@@ -703,6 +814,7 @@ impl Engine {
             limit,
             &mut lower_flag,
         )?;
+        stat!(self.stats.tt_hits += 1;);
         let lw = cards.least_win;
         let bm_suit = i32::from(cards.best_move_suit);
         let bm_rank = i32::from(cards.best_move_rank);
@@ -761,10 +873,13 @@ impl Engine {
 
         let mut chosen_move = MoveType::default();
         let mut cutoff = false;
+        #[cfg(feature = "profiling")]
+        let mut move_index = 0u32;
         loop {
             let win_arr = pos.win_ranks[depth_u];
             let mply = self.moves.make_next(tricks, 1, &win_arr);
             let Some(mply) = mply else { break };
+            stat!(move_index += 1;);
 
             self.make1(pos, depth, &mply);
             value = self.ab_search_2(pos, tt, target, depth - 1);
@@ -784,6 +899,12 @@ impl Engine {
         }
         if cutoff {
             self.best_move[depth_u] = chosen_move;
+        }
+        #[cfg(feature = "profiling")]
+        if cutoff {
+            self.stats.note_cutoff(move_index);
+        } else {
+            self.stats.allnode_nodes += 1;
         }
         value
     }
@@ -814,10 +935,13 @@ impl Engine {
 
         let mut chosen_move = MoveType::default();
         let mut cutoff = false;
+        #[cfg(feature = "profiling")]
+        let mut move_index = 0u32;
         loop {
             let win_arr = pos.win_ranks[depth_u];
             let mply = self.moves.make_next(tricks, 2, &win_arr);
             let Some(mply) = mply else { break };
+            stat!(move_index += 1;);
 
             self.make2(pos, depth, &mply);
             value = self.ab_search_3(pos, tt, target, depth - 1);
@@ -837,6 +961,12 @@ impl Engine {
         }
         if cutoff {
             self.best_move[depth_u] = chosen_move;
+        }
+        #[cfg(feature = "profiling")]
+        if cutoff {
+            self.stats.note_cutoff(move_index);
+        } else {
+            self.stats.allnode_nodes += 1;
         }
         value
     }
@@ -871,11 +1001,14 @@ impl Engine {
         let mut make_win_rank = [0u16; DDS_SUITS];
         let mut chosen_move = MoveType::default();
         let mut cutoff = false;
+        #[cfg(feature = "profiling")]
+        let mut move_index = 0u32;
 
         loop {
             let win_arr = pos.win_ranks[depth_u];
             let mply = self.moves.make_next(tricks, 3, &win_arr);
             let Some(mply) = mply else { break };
+            stat!(move_index += 1;);
 
             self.make3(pos, &mut make_win_rank, depth, &mply);
 
@@ -910,6 +1043,12 @@ impl Engine {
         }
         if cutoff {
             self.best_move[depth_u] = chosen_move;
+        }
+        #[cfg(feature = "profiling")]
+        if cutoff {
+            self.stats.note_cutoff(move_index);
+        } else {
+            self.stats.allnode_nodes += 1;
         }
         value
     }

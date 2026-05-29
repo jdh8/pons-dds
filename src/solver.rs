@@ -236,6 +236,23 @@ impl Solver {
     pub const fn bisection_timing(&self) -> (u128, u128) {
         (self.engine.iter1_nanos, self.engine.later_nanos)
     }
+
+    /// Cumulative per-node search instrumentation (TT hit rate,
+    /// move-ordering cutoff index, node-0 early-exit funnel).
+    ///
+    /// All fields are zero unless the crate is built with
+    /// `--features profiling`.
+    #[inline]
+    #[must_use]
+    pub const fn search_stats(&self) -> crate::search::SearchStats {
+        self.engine.stats
+    }
+
+    /// Zero the per-node search instrumentation counters.
+    #[inline]
+    pub fn reset_search_stats(&mut self) {
+        self.engine.stats = crate::search::SearchStats::default();
+    }
 }
 
 impl Default for Solver {

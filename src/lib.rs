@@ -54,4 +54,5 @@ pub mod solver;
 pub(crate) mod tt;
 
 pub use contract_bridge::FullDeal;
+pub use search::SearchStats;
 pub use solver::{Solver, TrickCountTable, solve_deals};

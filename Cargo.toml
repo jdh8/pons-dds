@@ -10,6 +10,13 @@ license = "Apache-2.0"
 categories = ["game-development"]
 keywords = ["bridge", "double-dummy"]
 
+[features]
+# Per-node search instrumentation (TT hit rate, move-ordering cutoff
+# index, node-0 early-exit funnel). Off by default — every counter bump
+# is gated behind `#[cfg(feature = "profiling")]`, so a normal release
+# build carries zero overhead.
+profiling = []
+
 [dependencies]
 arrayvec = "0.7"
 bitflags = "2"
