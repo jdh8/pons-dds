@@ -4,10 +4,10 @@
 //! [`dds-bridge`](https://crates.io/crates/dds-bridge) crate so that a
 //! `pons` migration from one to the other can be a near-mechanical swap.
 //!
-//! The two entry points are [`Solver::solve_deal`] for a single deal
-//! (returns a full 5 × 4 [`TrickCountTable`]) and the free function
-//! [`solve_deals`] for a parallel batch backed by `rayon` with a
-//! per-worker thread-local [`Solver`].
+//! The entry points are [`Solver::solve_deal`] for a single deal on one
+//! thread (returns a full 5 × 4 [`TrickCountTable`]), [`solve_deals`] for
+//! a `rayon` batch parallelised per (deal, strain), and
+//! [`solve_deal_parallel`] for a single deal fanned out across workers.
 
 use crate::moves::DDS_NOTRUMP;
 use crate::pos::Pos;
@@ -300,14 +300,20 @@ impl Default for Solver {
 
 /// Solve a batch of deals in parallel.
 ///
-/// Each rayon worker thread amortises its own [`Solver`] (and the
-/// associated transposition-table allocation) across the deals routed
-/// to it via a [`std::thread_local!`] handle. Order of results matches
-/// the order of `deals`.
+/// The unit of work is a single **(deal, strain)** pair, not a whole
+/// deal: a one-deal batch therefore spreads its 5 strains across up to 5
+/// rayon workers, and a large batch yields `5 × deals.len()` tasks for
+/// finer load-balancing. The 4 declarers of a strain stay on one task so
+/// the per-strain transposition table still warms across them (see
+/// [`Solver::solve_strain`]).
+///
+/// Each rayon worker amortises its own [`Solver`] (and the associated
+/// transposition-table allocation) across the tasks routed to it via a
+/// [`std::thread_local!`] handle. Order of results matches the order of
+/// `deals`.
 ///
 /// This is the recommended entry point for solving many deals at once;
-/// constructing a fresh [`Solver`] per deal would defeat warm-cache
-/// effects within a worker.
+/// for low-latency solving of a single deal see [`solve_deal_parallel`].
 #[must_use]
 pub fn solve_deals(deals: &[FullDeal]) -> Vec<TrickCountTable> {
     use std::cell::RefCell;
@@ -316,10 +322,40 @@ pub fn solve_deals(deals: &[FullDeal]) -> Vec<TrickCountTable> {
         static SOLVER: RefCell<Solver> = RefCell::new(Solver::new());
     }
 
-    deals
+    // Flatten to (deal, strain) work-units. The 4 declarers of a strain
+    // share one unit to preserve intra-strain TT reuse.
+    let tasks: Vec<(usize, usize)> = (0..deals.len())
+        .flat_map(|d| (0..STRAINS.len()).map(move |s| (d, s)))
+        .collect();
+
+    let rows: Vec<(usize, usize, [u8; 4])> = tasks
         .par_iter()
-        .map(|deal| SOLVER.with(|s| s.borrow_mut().solve_deal(*deal)))
-        .collect()
+        .map(|&(d, s)| {
+            let row = SOLVER.with(|cell| cell.borrow_mut().solve_strain(deals[d], s));
+            (d, s, row)
+        })
+        .collect();
+
+    // Scatter the (deal, strain) rows back into per-deal tables. Each
+    // (d, s) is unique, so order of application does not matter.
+    let mut tables = vec![TrickCountTable::default(); deals.len()];
+    for (d, s, row) in rows {
+        tables[d].tricks[s] = row;
+    }
+    tables
+}
+
+/// Solve a single deal, spreading its 5 strains across rayon workers.
+///
+/// A latency-oriented convenience over [`solve_deals`]: where
+/// [`Solver::solve_deal`] runs the 5 strains sequentially on one thread,
+/// this fans them out so one deal can use up to 5 cores. For many deals
+/// at once, prefer [`solve_deals`].
+#[must_use]
+pub fn solve_deal_parallel(deal: FullDeal) -> TrickCountTable {
+    solve_deals(std::slice::from_ref(&deal))
+        .pop()
+        .unwrap_or_default()
 }
 
 // ---------------------------------------------------------------------
@@ -501,6 +537,15 @@ mod tests {
         assert_eq!(parallel.len(), 2);
         assert_eq!(parallel[0], expected_a);
         assert_eq!(parallel[1], expected_a);
+    }
+
+    /// `solve_deal_parallel` fans the 5 strains across rayon workers but
+    /// must return the same table as the sequential single-thread solve.
+    #[test]
+    fn solve_deal_parallel_matches_single_deal_solver() {
+        let deal = each_hand_holds_one_suit_deal();
+        let mut sequential = Solver::new();
+        assert_eq!(solve_deal_parallel(deal), sequential.solve_deal(deal));
     }
 
     /// Cross-check against a hand-verified reference table.
