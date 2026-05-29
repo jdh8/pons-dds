@@ -7,8 +7,10 @@
 //! The canonical entry points are the free functions [`solve_deal`] (one
 //! deal, its 5 strains fanned across `rayon` workers) and [`solve_deals`]
 //! (a batch, parallelised per (deal, strain)); both return a full 5 × 4
-//! [`TrickCountTable`] per deal. [`Solver::solve_deal`] is the sequential
-//! single-thread building block they reuse — handy for deterministic
+//! [`TrickCountTable`] per deal. [`Solver`] itself is the per-strain
+//! building block they reuse: one instance is bound to a single strain
+//! (reconfigurable via [`Solver::set_strain`]) and [`Solver::solve`]s all
+//! 4 declarers of that strain for a deal — handy for deterministic
 //! profiling or driving the solve yourself.
 
 use crate::convert::dds_suit_from_cb;
@@ -86,15 +88,21 @@ impl TrickCountTable {
 }
 
 // ---------------------------------------------------------------------
-// Per-instance Solver
+// Per-strain Solver
 // ---------------------------------------------------------------------
 
-/// Per-instance solver.
+/// Per-strain solver.
 ///
-/// Owns a search engine and a transposition table; reuses both across
-/// calls so the TT can warm up. Solving a new deal resets the TT — the
-/// cached entries from a previous deal use a stale per-deal lookup
-/// table and would produce incorrect hits.
+/// Bound to a single strain (set at [`Self::new`], retargetable via
+/// [`Self::set_strain`]) and owns a search engine and a transposition
+/// table, mirroring the per-strain [`Engine`]. [`Self::solve`] runs all
+/// 4 declarers of the configured strain for a deal; for a full 5 × 4
+/// table across every strain use the free [`solve_deal`] / [`solve_deals`].
+///
+/// The engine and TT are reused across calls so the TT can warm up.
+/// Solving a deal resets the TT — the cached entries from a previous
+/// deal (or strain) use a stale per-deal lookup table / trump and would
+/// produce incorrect hits.
 ///
 /// `Solver` is `Send` but intentionally not `Sync`: the transposition
 /// table is per-search-context and not safe for concurrent reads or
@@ -106,20 +114,20 @@ pub struct Solver {
 }
 
 impl Solver {
-    /// Create a fresh solver with the default transposition-table
-    /// memory budget. The trump is initialised to notrump; both will
-    /// be overwritten by every [`Self::solve_deal`] call.
+    /// Create a fresh solver for `strain` with the default
+    /// transposition-table memory budget. Retarget the strain later with
+    /// [`Self::set_strain`].
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(strain: Strain) -> Self {
         Self {
-            engine: Engine::new(Strain::Notrump),
+            engine: Engine::new(strain),
             tt: TransTable::new(),
         }
     }
 
-    /// Create a solver with an explicit transposition-table memory
-    /// budget, in MiB: `default_mb` is the size the table shrinks back to
-    /// on reset (per strain / deal), `max_mb` the ceiling before a full
+    /// Create a solver for `strain` with an explicit transposition-table
+    /// memory budget, in MiB: `default_mb` is the size the table shrinks
+    /// back to on reset (per solve), `max_mb` the ceiling before a full
     /// reset is forced. [`Self::new`] uses
     /// [`crate::tt::DEFAULT_MEMORY_MB`] / [`crate::tt::MAX_MEMORY_MB`].
     ///
@@ -129,33 +137,23 @@ impl Solver {
     /// size — a full table just resets and rebuilds. Mainly useful for
     /// capping per-thread memory in highly parallel runs.
     #[must_use]
-    pub fn with_memory(default_mb: u32, max_mb: u32) -> Self {
+    pub fn with_memory(strain: Strain, default_mb: u32, max_mb: u32) -> Self {
         Self {
-            engine: Engine::new(Strain::Notrump),
+            engine: Engine::new(strain),
             tt: TransTable::with_memory(default_mb, max_mb),
         }
     }
 
-    /// Solve a single full deal across all 5 strains × 4 declarers.
-    /// Returns the full 5 × 4 double-dummy table.
-    ///
-    /// Internally runs 20 alpha-beta searches. The transposition table
-    /// is reset whenever the trump changes (the cached bounds become
-    /// stale when the strain — hence the win/ruff dynamics — changes),
-    /// matching the vendor's `SolveBoardInternal` / `SolveSameBoard`
-    /// pairing: reset on `newDeal`/`newTrump`, reuse across same-strain
-    /// declarer changes.
-    #[must_use]
-    pub fn solve_deal(&mut self, deal: FullDeal) -> TrickCountTable {
-        let mut table = TrickCountTable::default();
-        for strain_idx in 0..STRAINS.len() {
-            table.tricks[strain_idx] = self.solve_strain(deal, strain_idx);
-        }
-        table
+    /// Retarget the solver to a different strain. The next [`Self::solve`]
+    /// resets the transposition table, so no stale-trump entries survive
+    /// the change.
+    pub fn set_strain(&mut self, strain: Strain) {
+        self.engine.set_strain(strain);
     }
 
-    /// Solve a single strain (all 4 declarers) of `deal`, returning the
-    /// per-seat trick row in [`SEATS`] order (North, East, South, West).
+    /// Solve the configured strain (all 4 declarers) of `deal`, returning
+    /// the per-seat trick row in [`SEATS`] order (North, East, South,
+    /// West).
     ///
     /// Resets the transposition table for the strain's trump, then reuses
     /// it across the 4 declarer searches: the bounds are framed relative
@@ -163,13 +161,13 @@ impl Solver {
     /// MAX side — rotates within a strain. This per-strain unit is the
     /// grain of parallelism in [`solve_deals`]; keeping the 4 declarers
     /// on one unit preserves that intra-strain TT reuse.
-    fn solve_strain(&mut self, deal: FullDeal, strain_idx: usize) -> [u8; 4] {
+    #[must_use]
+    pub fn solve(&mut self, deal: FullDeal) -> [u8; 4] {
         // 13 tricks left → ini_depth = 48. The leader of trick 13 (the
         // opening lead) plays at depth `ini_depth`, then each follower
         // decrements depth by 1.
         const INI_DEPTH: i32 = 48;
 
-        self.engine.set_strain(STRAINS[strain_idx]);
         // Drop entries cached under the previous trump (or for any
         // previous deal): the bounds stored at a given (trick, hand,
         // aggr, hand_dist) key are computed under the active trump
@@ -263,7 +261,7 @@ impl Solver {
 impl Default for Solver {
     #[inline]
     fn default() -> Self {
-        Self::new()
+        Self::new(Strain::Notrump)
     }
 }
 
@@ -278,7 +276,7 @@ impl Default for Solver {
 /// rayon workers, and a large batch yields `5 × deals.len()` tasks for
 /// finer load-balancing. The 4 declarers of a strain stay on one task so
 /// the per-strain transposition table still warms across them (see
-/// [`Solver::solve_strain`]).
+/// [`Solver::solve`]).
 ///
 /// Each rayon worker amortises its own [`Solver`] (and the associated
 /// transposition-table allocation) across the tasks routed to it via a
@@ -292,7 +290,7 @@ pub fn solve_deals(deals: &[FullDeal]) -> Vec<TrickCountTable> {
     use std::cell::RefCell;
 
     thread_local! {
-        static SOLVER: RefCell<Solver> = RefCell::new(Solver::new());
+        static SOLVER: RefCell<Solver> = RefCell::new(Solver::new(Strain::Notrump));
     }
 
     // Flatten to (deal, strain) work-units. The 4 declarers of a strain
@@ -304,7 +302,11 @@ pub fn solve_deals(deals: &[FullDeal]) -> Vec<TrickCountTable> {
     let rows: Vec<(usize, usize, [u8; 4])> = tasks
         .par_iter()
         .map(|&(d, s)| {
-            let row = SOLVER.with(|cell| cell.borrow_mut().solve_strain(deals[d], s));
+            let row = SOLVER.with(|cell| {
+                let mut solver = cell.borrow_mut();
+                solver.set_strain(STRAINS[s]);
+                solver.solve(deals[d])
+            });
             (d, s, row)
         })
         .collect();
@@ -320,12 +322,12 @@ pub fn solve_deals(deals: &[FullDeal]) -> Vec<TrickCountTable> {
 
 /// Solve a single deal, spreading its 5 strains across rayon workers.
 ///
-/// The recommended way to solve one deal. Where [`Solver::solve_deal`]
-/// runs the 5 strains sequentially on one thread, this fans them out so a
-/// single deal can use up to 5 cores — markedly faster on a multi-core
-/// machine, and what keeps the pure-Rust solver competitive with the FFI
-/// engines (whose own single-deal calls are internally threaded). For
-/// many deals at once, prefer [`solve_deals`].
+/// The recommended way to solve one deal. Where a single per-strain
+/// [`Solver`] would run the 5 strains sequentially on one thread, this
+/// fans them out so a single deal can use up to 5 cores — markedly faster
+/// on a multi-core machine, and what keeps the pure-Rust solver
+/// competitive with the FFI engines (whose own single-deal calls are
+/// internally threaded). For many deals at once, prefer [`solve_deals`].
 #[must_use]
 pub fn solve_deal(deal: FullDeal) -> TrickCountTable {
     solve_deals(std::slice::from_ref(&deal))
@@ -342,6 +344,20 @@ mod tests {
     use super::*;
     use contract_bridge::deal::Builder;
     use contract_bridge::hand::{Hand, Holding};
+
+    /// Sequentially solve all 5 strains of `deal` on a single per-strain
+    /// [`Solver`], returning the full 5 × 4 table. The deterministic
+    /// single-thread reference the parallel free functions are checked
+    /// against.
+    fn solve_deal_sequential(deal: FullDeal) -> TrickCountTable {
+        let mut solver = Solver::new(Strain::Notrump);
+        let mut table = TrickCountTable::default();
+        for (i, strain) in STRAINS.iter().enumerate() {
+            solver.set_strain(*strain);
+            table.tricks[i] = solver.solve(deal);
+        }
+        table
+    }
 
     /// Build a deal where each seat holds exactly one full 13-card suit:
     /// North = spades, East = hearts, South = diamonds, West = clubs.
@@ -424,8 +440,7 @@ mod tests {
     #[test]
     fn solve_deal_each_hand_one_suit_notrump() {
         let deal = each_hand_holds_one_suit_deal();
-        let mut solver = Solver::new();
-        let table = solver.solve_deal(deal);
+        let table = solve_deal_sequential(deal);
 
         // Notrump row: declarer always makes 0.
         for seat in Seat::ALL {
@@ -465,8 +480,7 @@ mod tests {
     #[test]
     fn solve_deal_each_hand_one_suit_trump_tables() {
         let deal = each_hand_holds_one_suit_deal();
-        let mut solver = Solver::new();
-        let table = solver.solve_deal(deal);
+        let table = solve_deal_sequential(deal);
 
         // (strain, ns_makes, ew_makes)
         let cases = [
@@ -493,8 +507,7 @@ mod tests {
         // parity.
         let deals = vec![deal_a, deal_a];
 
-        let mut sequential = Solver::new();
-        let expected_a = sequential.solve_deal(deal_a);
+        let expected_a = solve_deal_sequential(deal_a);
 
         let parallel = solve_deals(&deals);
         assert_eq!(parallel.len(), 2);
@@ -507,8 +520,7 @@ mod tests {
     #[test]
     fn solve_deal_matches_single_deal_solver() {
         let deal = each_hand_holds_one_suit_deal();
-        let mut sequential = Solver::new();
-        assert_eq!(solve_deal(deal), sequential.solve_deal(deal));
+        assert_eq!(solve_deal(deal), solve_deal_sequential(deal));
     }
 
     /// Cross-check against a hand-verified reference table.
@@ -530,8 +542,7 @@ mod tests {
                    J973.J98742.3.K4 KQT2.AT.J6542.85";
         let deal: FullDeal = pbn.parse().expect("reference PBN parses");
 
-        let mut solver = Solver::new();
-        let got = solver.solve_deal(deal);
+        let got = solve_deal_sequential(deal);
 
         // Reference rows in (N, E, S, W) order — verified against
         // ddss::Solver::lock().solve_deal(deal).

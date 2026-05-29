@@ -21,6 +21,7 @@
 //!   the "all-node" share is nodes searched to exhaustion with no cutoff.
 
 use contract_bridge::deck::full_deal;
+use contract_bridge::{FullDeal, Strain};
 use dds_rs::Solver;
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
@@ -35,6 +36,15 @@ fn pct(num: u64, den: u64) -> f64 {
     }
 }
 
+/// Solve all 5 strains of `deal` on a single per-strain [`Solver`] so the
+/// engine's per-node counters accumulate across the whole 5 × 4 table.
+fn solve_full(solver: &mut Solver, deal: FullDeal) {
+    for strain in Strain::ASC {
+        solver.set_strain(strain);
+        std::hint::black_box(solver.solve(deal));
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 fn main() {
     let n: usize = std::env::args()
@@ -45,16 +55,16 @@ fn main() {
     let mut rng = SmallRng::seed_from_u64(0);
     let deals: Vec<_> = (0..n).map(|_| full_deal(&mut rng)).collect();
 
-    let mut solver = Solver::new();
+    let mut solver = Solver::new(Strain::Notrump);
     // Warmup pass (not measured): populate any first-touch caches.
     for deal in &deals {
-        std::hint::black_box(solver.solve_deal(*deal));
+        solve_full(&mut solver, *deal);
     }
     solver.reset_search_stats();
 
     let start = Instant::now();
     for deal in &deals {
-        std::hint::black_box(solver.solve_deal(*deal));
+        solve_full(&mut solver, *deal);
     }
     let elapsed = start.elapsed();
 

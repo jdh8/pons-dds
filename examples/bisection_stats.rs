@@ -1,6 +1,6 @@
 //! Measures whether `Engine::search_target`'s bisection is wasteful.
 //!
-//! Each `solve_deal` call invokes `search_target` 20 times (5 strains ×
+//! Solving a full deal invokes `search_target` 20 times (5 strains ×
 //! 4 declarers). Each `search_target` runs a binary search on the trick
 //! target, calling `ab_search_0` once per bisection iteration. If the
 //! transposition table carries bounds between successive probes, that
@@ -10,10 +10,20 @@
 //! Run with `cargo run --release --example bisection_stats -- [N]`.
 
 use contract_bridge::deck::full_deal;
+use contract_bridge::{FullDeal, Strain};
 use dds_rs::Solver;
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 use std::time::Instant;
+
+/// Solve all 5 strains of `deal` on a single per-strain [`Solver`] so the
+/// engine's bisection counters accumulate across the whole 5 × 4 table.
+fn solve_full(solver: &mut Solver, deal: FullDeal) {
+    for strain in Strain::ASC {
+        solver.set_strain(strain);
+        std::hint::black_box(solver.solve(deal));
+    }
+}
 
 fn main() {
     let n: usize = std::env::args()
@@ -25,16 +35,16 @@ fn main() {
     let mut rng = SmallRng::seed_from_u64(0);
     let deals: Vec<_> = (0..n).map(|_| full_deal(&mut rng)).collect();
 
-    let mut solver = Solver::new();
+    let mut solver = Solver::new(Strain::Notrump);
     // One warmup pass to populate caches; not timed.
     for deal in &deals {
-        std::hint::black_box(solver.solve_deal(*deal));
+        solve_full(&mut solver, *deal);
     }
     solver.reset_bisection_stats();
 
     let start = Instant::now();
     for deal in &deals {
-        std::hint::black_box(solver.solve_deal(*deal));
+        solve_full(&mut solver, *deal);
     }
     let elapsed = start.elapsed();
 

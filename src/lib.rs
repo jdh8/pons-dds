@@ -9,12 +9,12 @@
 //!
 //! # v0.1 scope
 //!
-//! This release ships the [`Solver`] API: a per-instance solver that
-//! produces a full 5 × 4 [`TrickCountTable`] for a [`FullDeal`], plus
-//! rayon-parallel [`solve_deal`] (single-deal) and [`solve_deals`]
-//! (batch) helpers. The internal substrate
-//! (position state, move generator, search engine, transposition table,
-//! and friends) remains crate-private.
+//! This release ships the [`Solver`] API: a per-strain solver that
+//! produces one strain's row of a [`TrickCountTable`] for a [`FullDeal`],
+//! plus rayon-parallel [`solve_deal`] (single-deal) and [`solve_deals`]
+//! (batch) helpers that assemble the full 5 × 4 table. The internal
+//! substrate (position state, move generator, search engine,
+//! transposition table, and friends) remains crate-private.
 //!
 //! # Algorithm reference
 //!

@@ -23,6 +23,19 @@ fn deals() -> Vec<FullDeal> {
     (0..N).map(|_| full_deal(&mut rng)).collect()
 }
 
+/// Sequentially solve all 5 strains of `deal` on one per-strain
+/// [`dds_rs::Solver`], returning the raw `[strain][seat]` matrix. The
+/// deterministic single-thread reference for the parallel free functions.
+fn solve_deal_sequential(deal: FullDeal) -> [[u8; 4]; 5] {
+    let mut solver = dds_rs::Solver::new(Strain::Notrump);
+    let mut out = [[0u8; 4]; 5];
+    for (i, strain) in Strain::ASC.into_iter().enumerate() {
+        solver.set_strain(strain);
+        out[i] = solver.solve(deal);
+    }
+    out
+}
+
 /// Lower a [`ddss::TrickCountTable`] into the raw `[strain][seat]`
 /// `u8` matrix used by [`dds_rs::TrickCountTable`].
 fn extract_ddss(t: &ddss::TrickCountTable) -> [[u8; 4]; 5] {
@@ -81,10 +94,9 @@ fn to_dds_bridge_deal(deal: FullDeal) -> dds_bridge::FullDeal {
 #[allow(clippy::significant_drop_tightening)] // hold the lock across the loop
 fn dds_rs_matches_ddss() {
     let deals = deals();
-    let mut ours = dds_rs::Solver::new();
     let theirs = ddss::Solver::lock();
     for (i, &d) in deals.iter().enumerate() {
-        let our_t = ours.solve_deal(d).tricks;
+        let our_t = dds_rs::solve_deal(d).tricks;
         let their_t = extract_ddss(&theirs.solve_deal(d));
         assert_eq!(
             our_t, their_t,
@@ -97,10 +109,9 @@ fn dds_rs_matches_ddss() {
 #[allow(clippy::significant_drop_tightening)] // hold the lock across the loop
 fn dds_rs_matches_dds_bridge() {
     let deals = deals();
-    let mut ours = dds_rs::Solver::new();
     let theirs = dds_bridge::Solver::lock();
     for (i, &d) in deals.iter().enumerate() {
-        let our_t = ours.solve_deal(d).tricks;
+        let our_t = dds_rs::solve_deal(d).tricks;
         let their_t = extract_dds_bridge(&theirs.solve_deal(to_dds_bridge_deal(d)));
         assert_eq!(
             our_t, their_t,
@@ -116,11 +127,10 @@ fn dds_rs_matches_dds_bridge() {
 fn dds_rs_solve_deals_matches_single() {
     let deals = deals();
     let batch = dds_rs::solve_deals(&deals);
-    let mut single = dds_rs::Solver::new();
     for (i, &d) in deals.iter().enumerate() {
         assert_eq!(
             batch[i].tricks,
-            single.solve_deal(d).tricks,
+            solve_deal_sequential(d),
             "batch vs single mismatch on deal #{i}: {d}",
         );
     }

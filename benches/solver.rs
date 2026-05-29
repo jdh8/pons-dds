@@ -8,8 +8,8 @@
 //!
 //! [`dds-bridge`]: https://crates.io/crates/dds-bridge
 
-use contract_bridge::FullDeal;
 use contract_bridge::deck::full_deal;
+use contract_bridge::{FullDeal, Strain};
 use core::hint::black_box;
 use core::time::Duration;
 use criterion::{BatchSize, Criterion, Throughput, criterion_group, criterion_main};
@@ -23,13 +23,24 @@ fn deals(seed: u64, n: usize) -> Vec<FullDeal> {
     (0..n).map(|_| full_deal(&mut rng)).collect()
 }
 
+/// Sequentially solve all 5 strains of `deal` on one per-strain
+/// [`Solver`], returning the full 5 × 4 table.
+fn solve_full(solver: &mut Solver, deal: FullDeal) -> [[u8; 4]; 5] {
+    let mut table = [[0u8; 4]; 5];
+    for (i, strain) in Strain::ASC.into_iter().enumerate() {
+        solver.set_strain(strain);
+        table[i] = solver.solve(deal);
+    }
+    table
+}
+
 fn bench_solve_deal_single(c: &mut Criterion) {
     let mut rng = SmallRng::seed_from_u64(0);
-    let mut solver = Solver::new();
+    let mut solver = Solver::new(Strain::Notrump);
     c.bench_function("solve_deal_single", |b| {
         b.iter_batched(
             || full_deal(&mut rng),
-            |deal| black_box(solver.solve_deal(black_box(deal))),
+            |deal| black_box(solve_full(&mut solver, black_box(deal))),
             BatchSize::SmallInput,
         );
     });
