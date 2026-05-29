@@ -1,0 +1,83 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+    - name: Check formatting
+      run: cargo fmt --check
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+    - name: Clippy
+      run: cargo clippy --all-features -- -W clippy::nursery -W clippy::pedantic
+
+  doc:
+    runs-on: ubuntu-latest
+    env:
+      RUSTDOCFLAGS: -Dwarnings
+    steps:
+    - uses: actions/checkout@v6
+    - name: Build docs
+      run: cargo doc --no-deps --all-features
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        rust: [stable, "1.88"]
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v6
+    - name: Install Rust ${{ matrix.rust }}
+      run: rustup toolchain install ${{ matrix.rust }} --profile minimal && rustup default ${{ matrix.rust }}
+    - name: Test
+      run: cargo test --all-features --verbose
+
+  test-release:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+    - name: Install Rust stable
+      run: rustup toolchain install stable --profile minimal && rustup default stable
+    - name: Test (release profile)
+      run: cargo test --release --all-features --verbose
+
+  bench:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      deployments: write
+    steps:
+    - uses: actions/checkout@v6
+    - name: Install Rust stable
+      run: rustup toolchain install stable --profile minimal && rustup default stable
+    - name: Run benchmark
+      run: cargo bench --bench solver -- --output-format bencher | tee bench-output.txt
+    - name: Publish benchmark numbers
+      uses: benchmark-action/github-action-benchmark@v1
+      with:
+        tool: cargo
+        output-file-path: bench-output.txt
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        auto-push: true
+        gh-pages-branch: gh-pages
+        benchmark-data-dir-path: dev/bench
+        alert-threshold: 200%
+        comment-on-alert: false
+        fail-on-alert: false
