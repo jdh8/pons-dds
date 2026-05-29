@@ -31,6 +31,7 @@
 //! `second_best` into a per-trick `winners` slot so `undo0` can restore
 //! them exactly.
 
+use crate::convert::dds_trump_from_strain;
 use crate::later_tricks::{later_tricks_max, later_tricks_min};
 use crate::lookup::{BIT_MAP_RANK, WIN_RANKS};
 use crate::move_type::{HighCard, MoveType};
@@ -38,6 +39,7 @@ use crate::moves::{DDS_NOTRUMP, Moves, RelRanks};
 use crate::pos::{MAX_DEPTH, Pos};
 use crate::quick_tricks::{MAXNODE, MINNODE, quick_tricks, quick_tricks_second_hand};
 use crate::tt::{NodeCards, TransTable};
+use contract_bridge::Strain;
 
 const DDS_SUITS: usize = 4;
 const DDS_HANDS: usize = 4;
@@ -202,10 +204,11 @@ pub struct Engine {
 }
 
 impl Engine {
-    /// Create a fresh engine with the given trump. Use
+    /// Create a fresh engine for the given strain. Use
     /// [`Engine::set_deal`] to compute the `rel` table for a specific
     /// deal before running [`Engine::search_target`].
-    pub(crate) fn new(trump: i32) -> Self {
+    pub(crate) fn new(strain: Strain) -> Self {
+        let trump = dds_trump_from_strain(strain);
         let mut moves = Moves::new();
         moves.set_trump(trump);
 
@@ -243,9 +246,10 @@ impl Engine {
         self.node_type_store = node_type_store;
     }
 
-    /// Configure the [`Moves`] trump strain and the engine's cached
-    /// copy. Use [`DDS_NOTRUMP`] for notrump.
-    pub(crate) const fn set_trump(&mut self, trump: i32) {
+    /// Configure the search strain: updates the [`Moves`] trump and the
+    /// engine's cached `i32` copy used for hot-path indexing.
+    pub(crate) fn set_strain(&mut self, strain: Strain) {
+        let trump = dds_trump_from_strain(strain);
         self.trump = trump;
         self.moves.set_trump(trump);
     }
@@ -1163,7 +1167,7 @@ mod tests {
     fn empty_position_returns_zero() {
         let mut pos = Pos::default();
         let mut tt = TransTable::new();
-        let mut eng = Engine::new(DDS_NOTRUMP);
+        let mut eng = Engine::new(Strain::Notrump);
         eng.set_deal(&mut pos, &mut tt);
 
         // ini_depth = 0 — no tricks remaining.
@@ -1190,7 +1194,7 @@ mod tests {
         pos.first[ini_depth as usize] = 0;
 
         let mut tt = TransTable::new();
-        let mut eng = Engine::new(DDS_NOTRUMP);
+        let mut eng = Engine::new(Strain::Notrump);
         // NS = MAX, EW = MIN.
         eng.set_node_types([MAXNODE, MINNODE, MAXNODE, MINNODE]);
         eng.set_deal(&mut pos, &mut tt);
@@ -1218,7 +1222,7 @@ mod tests {
         pos.first[ini_depth as usize] = 1;
 
         let mut tt = TransTable::new();
-        let mut eng = Engine::new(DDS_NOTRUMP);
+        let mut eng = Engine::new(Strain::Notrump);
         // East leads — by SolverIF convention, when handToPlay is E or W,
         // NS are still MAX (declarer's side). But to make this test
         // simpler we leave NS = MAX so East's AH win = MIN win.
@@ -1271,7 +1275,7 @@ mod tests {
         pos.first[ini_depth as usize] = 0;
 
         let mut tt = TransTable::new();
-        let mut eng = Engine::new(DDS_NOTRUMP);
+        let mut eng = Engine::new(Strain::Notrump);
         eng.set_node_types([MAXNODE, MINNODE, MAXNODE, MINNODE]);
         eng.set_deal(&mut pos, &mut tt);
 

@@ -11,8 +11,7 @@
 //! single-thread building block they reuse — handy for deterministic
 //! profiling or driving the solve yourself.
 
-use crate::convert::{dds_suit_from_cb, dds_trump_from_strain};
-use crate::moves::DDS_NOTRUMP;
+use crate::convert::dds_suit_from_cb;
 use crate::pos::Pos;
 use crate::quick_tricks::{MAXNODE, MINNODE};
 use crate::search::Engine;
@@ -113,7 +112,7 @@ impl Solver {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            engine: Engine::new(DDS_NOTRUMP),
+            engine: Engine::new(Strain::Notrump),
             tt: TransTable::new(),
         }
     }
@@ -132,7 +131,7 @@ impl Solver {
     #[must_use]
     pub fn with_memory(default_mb: u32, max_mb: u32) -> Self {
         Self {
-            engine: Engine::new(DDS_NOTRUMP),
+            engine: Engine::new(Strain::Notrump),
             tt: TransTable::with_memory(default_mb, max_mb),
         }
     }
@@ -170,8 +169,7 @@ impl Solver {
         // decrements depth by 1.
         const INI_DEPTH: i32 = 48;
 
-        let trump = dds_trump_from_strain(STRAINS[strain_idx]);
-        self.engine.set_trump(trump);
+        self.engine.set_strain(STRAINS[strain_idx]);
         // Drop entries cached under the previous trump (or for any
         // previous deal): the bounds stored at a given (trick, hand,
         // aggr, hand_dist) key are computed under the active trump
