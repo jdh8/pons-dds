@@ -1,6 +1,6 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1780090289423,
-  "repoUrl": "https://github.com/jdh8/dds-rs",
+  "lastUpdate": 1780095319025,
+  "repoUrl": "https://github.com/jdh8/pons-dds",
   "entries": {
     "Benchmark": [
       {
@@ -83,6 +83,48 @@ window.BENCHMARK_DATA = {
             "name": "solve_deals/200",
             "value": 22727534920,
             "range": "± 301357006",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "committer": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "distinct": true,
+          "id": "d01998728796c2f412ed70dba324361264f08530",
+          "message": "Rename crate to pons-dds and migrate all public/internal references to pons_dds",
+          "timestamp": "2026-05-30T06:47:32+08:00",
+          "tree_id": "afbfbbe6c5307cbed5b3679044098ca381b6ab52",
+          "url": "https://github.com/jdh8/pons-dds/commit/d01998728796c2f412ed70dba324361264f08530"
+        },
+        "date": 1780095318749,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "solve_deal",
+            "value": 99282237,
+            "range": "± 221567875",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/32",
+            "value": 3247927607,
+            "range": "± 40283517",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/200",
+            "value": 22164916716,
+            "range": "± 204350765",
             "unit": "ns/iter"
           }
         ]
