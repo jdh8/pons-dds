@@ -176,12 +176,21 @@
             parent.appendChild(canvas);
 
             const color = toolColors[dataset.length > 0 ? dataset[0].tool : '_'];
+            const rawUnit = dataset.length > 0 ? dataset[0].bench.unit : '';
+            let scale = 1;
+            let unit = rawUnit;
+            if (rawUnit.startsWith('ns')) {
+              const max = dataset.length > 0 ? Math.max(...dataset.map(d => d.bench.value)) : 0;
+              if (max >= 1e9)      { scale = 1e9; unit = 's'  + rawUnit.slice(2); }
+              else if (max >= 1e6) { scale = 1e6; unit = 'ms' + rawUnit.slice(2); }
+              else if (max >= 1e3) { scale = 1e3; unit = 'µs' + rawUnit.slice(2); }
+            }
             const data = {
               labels: dataset.map(d => d.commit.id.slice(0, 7)),
               datasets: [
                 {
                   label: name,
-                  data: dataset.map(d => d.bench.value),
+                  data: dataset.map(d => d.bench.value / scale),
                   borderColor: color,
                   backgroundColor: color + '60', // Add alpha for #rrggbbaa
                 }
@@ -201,7 +210,7 @@
                   {
                     scaleLabel: {
                       display: true,
-                      labelString: dataset.length > 0 ? dataset[0].bench.unit : '',
+                      labelString: unit,
                     },
                     ticks: {
                       beginAtZero: true,
@@ -218,10 +227,11 @@
                   },
                   label: item => {
                     let label = item.value;
-                    const { range, unit } = dataset[item.index].bench;
+                    const { range } = dataset[item.index].bench;
                     label += ' ' + unit;
                     if (range) {
-                      label += ' (' + range + ')';
+                      const scaledRange = range.replace(/[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?/, m => +(parseFloat(m) / scale).toPrecision(4));
+                      label += ' (' + scaledRange + ')';
                     }
                     return label;
                   },
