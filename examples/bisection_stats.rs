@@ -66,8 +66,14 @@ fn main() {
     println!("bisection iterations:   {iters}");
     println!("avg iters per call:     {avg:.3}");
     println!();
-    println!("iter 1 total:           {iter1_ns} ns ({:.1}%)", iter1_share * 100.0);
-    println!("iters 2..N total:       {later_ns} ns ({:.1}%)", (1.0 - iter1_share) * 100.0);
+    println!(
+        "iter 1 total:           {iter1_ns} ns ({:.1}%)",
+        iter1_share * 100.0
+    );
+    println!(
+        "iters 2..N total:       {later_ns} ns ({:.1}%)",
+        (1.0 - iter1_share) * 100.0
+    );
     println!("avg iter 1 cost:        {iter1_avg_ns:.0} ns");
     println!("avg iter 2..N cost:     {later_avg_ns:.0} ns");
     println!();
