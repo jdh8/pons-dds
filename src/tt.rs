@@ -53,10 +53,18 @@ const TT_HANDS: usize = 4;
 const TT_SUITS: usize = 4;
 const TT_HASH_BUCKETS: usize = 256;
 
-/// Default per-instance memory budget in MiB (matches `THREADMEM_LARGE_DEF_MB`).
-pub const DEFAULT_MEMORY_MB: u32 = 95;
-/// Maximum per-instance memory budget in MiB (matches `THREADMEM_LARGE_MAX_MB`).
-pub const MAX_MEMORY_MB: u32 = 160;
+/// Default per-instance memory budget in MiB.
+///
+/// Raised above the vendor's `THREADMEM_LARGE_DEF_MB` (95): a TT-size
+/// sweep showed the search is memory-latency bound but wants *more* TT,
+/// not less — a starved table full-resets and re-searches, exploding the
+/// node count. Throughput rises ~4% from 95→160 and plateaus there (see
+/// `examples/tt_sweep.rs`). Note the TT is per-thread, so parallel
+/// [`crate::solve_deals`] peaks at roughly cores × [`MAX_MEMORY_MB`] MiB.
+pub const DEFAULT_MEMORY_MB: u32 = 160;
+/// Maximum per-instance memory budget in MiB. Raised above the vendor's
+/// `THREADMEM_LARGE_MAX_MB` (160); see [`DEFAULT_MEMORY_MB`].
+pub const MAX_MEMORY_MB: u32 = 256;
 
 // ---------- Public types ---------------------------------------------
 
@@ -931,13 +939,12 @@ mod tests {
     #[test]
     fn new_has_default_memory_limits() {
         let tt = TransTable::new();
-        // Defaults are 95 and 160 MiB. Each page is ~6.3 MiB.
-        // 95 * 1024 / (1000 * sizeof(WinBlock) / 1024) ≈ 14-15 pages.
-        // 160 * 1024 / ... ≈ 24-25 pages.
-        assert!(tt.pages_default >= 10);
+        // Defaults are 160 and 256 MiB. Each page is ~6.3 MiB.
+        // 160 * 1024 / (1000 * sizeof(WinBlock) / 1024) ≈ 24-25 pages.
+        // 256 * 1024 / ... ≈ 39-40 pages.
+        assert!(tt.pages_default >= 20);
         assert!(tt.pages_maximum >= tt.pages_default);
-        // Maximum should be roughly the vendor's NUM_PAGES_MAXIMUM (25).
-        assert!(tt.pages_maximum <= 30);
+        assert!(tt.pages_maximum <= 45);
         assert!(tt.pages.is_empty());
     }
 

@@ -143,6 +143,25 @@ impl Solver {
         }
     }
 
+    /// Create a solver with an explicit transposition-table memory
+    /// budget, in MiB: `default_mb` is the size the table shrinks back to
+    /// on reset (per strain / deal), `max_mb` the ceiling before a full
+    /// reset is forced. [`Self::new`] uses
+    /// [`crate::tt::DEFAULT_MEMORY_MB`] / [`crate::tt::MAX_MEMORY_MB`].
+    ///
+    /// Bigger is better up to a plateau: a starved table full-resets and
+    /// re-searches, so undersizing it explodes the node count (16/32 MiB
+    /// is ~3.5× slower than the default). Correctness is unaffected at any
+    /// size — a full table just resets and rebuilds. Mainly useful for
+    /// capping per-thread memory in highly parallel runs.
+    #[must_use]
+    pub fn with_memory(default_mb: u32, max_mb: u32) -> Self {
+        Self {
+            engine: Engine::new(DDS_NOTRUMP),
+            tt: TransTable::with_memory(default_mb, max_mb),
+        }
+    }
+
     /// Solve a single full deal across all 5 strains × 4 declarers.
     /// Returns the full 5 × 4 double-dummy table.
     ///
