@@ -4,10 +4,12 @@
 //! [`dds-bridge`](https://crates.io/crates/dds-bridge) crate so that a
 //! `pons` migration from one to the other can be a near-mechanical swap.
 //!
-//! The entry points are [`Solver::solve_deal`] for a single deal on one
-//! thread (returns a full 5 × 4 [`TrickCountTable`]), [`solve_deals`] for
-//! a `rayon` batch parallelised per (deal, strain), and
-//! [`solve_deal_parallel`] for a single deal fanned out across workers.
+//! The canonical entry points are the free functions [`solve_deal`] (one
+//! deal, its 5 strains fanned across `rayon` workers) and [`solve_deals`]
+//! (a batch, parallelised per (deal, strain)); both return a full 5 × 4
+//! [`TrickCountTable`] per deal. [`Solver::solve_deal`] is the sequential
+//! single-thread building block they reuse — handy for deterministic
+//! profiling or driving the solve yourself.
 
 use crate::moves::DDS_NOTRUMP;
 use crate::pos::Pos;
@@ -313,7 +315,7 @@ impl Default for Solver {
 /// `deals`.
 ///
 /// This is the recommended entry point for solving many deals at once;
-/// for low-latency solving of a single deal see [`solve_deal_parallel`].
+/// for low-latency solving of a single deal see [`solve_deal`].
 #[must_use]
 pub fn solve_deals(deals: &[FullDeal]) -> Vec<TrickCountTable> {
     use std::cell::RefCell;
@@ -347,12 +349,14 @@ pub fn solve_deals(deals: &[FullDeal]) -> Vec<TrickCountTable> {
 
 /// Solve a single deal, spreading its 5 strains across rayon workers.
 ///
-/// A latency-oriented convenience over [`solve_deals`]: where
-/// [`Solver::solve_deal`] runs the 5 strains sequentially on one thread,
-/// this fans them out so one deal can use up to 5 cores. For many deals
-/// at once, prefer [`solve_deals`].
+/// The recommended way to solve one deal. Where [`Solver::solve_deal`]
+/// runs the 5 strains sequentially on one thread, this fans them out so a
+/// single deal can use up to 5 cores — markedly faster on a multi-core
+/// machine, and what keeps the pure-Rust solver competitive with the FFI
+/// engines (whose own single-deal calls are internally threaded). For
+/// many deals at once, prefer [`solve_deals`].
 #[must_use]
-pub fn solve_deal_parallel(deal: FullDeal) -> TrickCountTable {
+pub fn solve_deal(deal: FullDeal) -> TrickCountTable {
     solve_deals(std::slice::from_ref(&deal))
         .pop()
         .unwrap_or_default()
@@ -539,13 +543,13 @@ mod tests {
         assert_eq!(parallel[1], expected_a);
     }
 
-    /// `solve_deal_parallel` fans the 5 strains across rayon workers but
+    /// The free `solve_deal` fans the 5 strains across rayon workers but
     /// must return the same table as the sequential single-thread solve.
     #[test]
-    fn solve_deal_parallel_matches_single_deal_solver() {
+    fn solve_deal_matches_single_deal_solver() {
         let deal = each_hand_holds_one_suit_deal();
         let mut sequential = Solver::new();
-        assert_eq!(solve_deal_parallel(deal), sequential.solve_deal(deal));
+        assert_eq!(solve_deal(deal), sequential.solve_deal(deal));
     }
 
     /// Cross-check against a hand-verified reference table.

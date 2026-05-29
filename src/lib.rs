@@ -11,8 +11,8 @@
 //!
 //! This release ships the [`Solver`] API: a per-instance solver that
 //! produces a full 5 × 4 [`TrickCountTable`] for a [`FullDeal`], plus
-//! rayon-parallel [`solve_deals`] (batch) and [`solve_deal_parallel`]
-//! (single-deal) helpers. The internal substrate
+//! rayon-parallel [`solve_deal`] (single-deal) and [`solve_deals`]
+//! (batch) helpers. The internal substrate
 //! (position state, move generator, search engine, transposition table,
 //! and friends) remains crate-private.
 //!
@@ -56,4 +56,4 @@ pub(crate) mod tt;
 
 pub use contract_bridge::FullDeal;
 pub use search::SearchStats;
-pub use solver::{Solver, TrickCountTable, solve_deal_parallel, solve_deals};
+pub use solver::{Solver, TrickCountTable, solve_deal, solve_deals};

@@ -13,7 +13,7 @@ use contract_bridge::deck::full_deal;
 use core::hint::black_box;
 use core::time::Duration;
 use criterion::{BatchSize, Criterion, Throughput, criterion_group, criterion_main};
-use dds_rs::{Solver, solve_deal_parallel, solve_deals};
+use dds_rs::{Solver, solve_deal, solve_deals};
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 
@@ -43,7 +43,7 @@ fn bench_solve_deal_parallel_single(c: &mut Criterion) {
     c.bench_function("solve_deal_parallel_single", |b| {
         b.iter_batched(
             || full_deal(&mut rng),
-            |deal| black_box(solve_deal_parallel(black_box(deal))),
+            |deal| black_box(solve_deal(black_box(deal))),
             BatchSize::SmallInput,
         );
     });
