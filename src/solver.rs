@@ -173,52 +173,65 @@ impl Solver {
     /// declarer changes.
     #[must_use]
     pub fn solve_deal(&mut self, deal: FullDeal) -> TrickCountTable {
+        let mut table = TrickCountTable::default();
+        for strain_idx in 0..STRAINS.len() {
+            table.tricks[strain_idx] = self.solve_strain(deal, strain_idx);
+        }
+        table
+    }
+
+    /// Solve a single strain (all 4 declarers) of `deal`, returning the
+    /// per-seat trick row in [`SEATS`] order (North, East, South, West).
+    ///
+    /// Resets the transposition table for the strain's trump, then reuses
+    /// it across the 4 declarer searches: the bounds are framed relative
+    /// to seat 0's side, so they stay valid as the declarer — hence the
+    /// MAX side — rotates within a strain. This per-strain unit is the
+    /// grain of parallelism in [`solve_deals`]; keeping the 4 declarers
+    /// on one unit preserves that intra-strain TT reuse.
+    fn solve_strain(&mut self, deal: FullDeal, strain_idx: usize) -> [u8; 4] {
         // 13 tricks left → ini_depth = 48. The leader of trick 13 (the
         // opening lead) plays at depth `ini_depth`, then each follower
         // decrements depth by 1.
         const INI_DEPTH: i32 = 48;
 
-        let mut table = TrickCountTable::default();
+        let trump = dds_trump_from_strain(STRAINS[strain_idx]);
+        self.engine.set_trump(trump);
+        // Drop entries cached under the previous trump (or for any
+        // previous deal): the bounds stored at a given (trick, hand,
+        // aggr, hand_dist) key are computed under the active trump
+        // and would be incorrect after a strain change.
+        self.tt.reset();
 
-        for (strain_idx, strain) in STRAINS.iter().enumerate() {
-            let trump = dds_trump_from_strain(*strain);
-            self.engine.set_trump(trump);
-            // Drop entries cached under the previous trump (or for any
-            // previous deal): the bounds stored at a given (trick, hand,
-            // aggr, hand_dist) key are computed under the active trump
-            // and would be incorrect after a strain change.
-            self.tt.reset();
+        let mut row = [0u8; 4];
+        for (seat_idx, declarer) in SEATS.iter().enumerate() {
+            // Opening leader = declarer's LHO; declarer plays third.
+            let leader = declarer.lho() as usize;
 
-            for (seat_idx, declarer) in SEATS.iter().enumerate() {
-                // Opening leader = declarer's LHO; declarer plays third.
-                let leader = declarer.lho() as usize;
+            // MAX = the declaring side. NS declares → [MAX, MIN, MAX,
+            // MIN]; EW declares → [MIN, MAX, MIN, MAX].
+            let node_types = if matches!(declarer, Seat::North | Seat::South) {
+                [MAXNODE, MINNODE, MAXNODE, MINNODE]
+            } else {
+                [MINNODE, MAXNODE, MINNODE, MAXNODE]
+            };
+            self.engine.set_node_types(node_types);
 
-                // MAX = the declaring side. NS declares → [MAX, MIN, MAX,
-                // MIN]; EW declares → [MIN, MAX, MIN, MAX].
-                let node_types = if matches!(declarer, Seat::North | Seat::South) {
-                    [MAXNODE, MINNODE, MAXNODE, MINNODE]
-                } else {
-                    [MINNODE, MAXNODE, MINNODE, MAXNODE]
-                };
-                self.engine.set_node_types(node_types);
+            // Rebuild Pos from scratch — cheap (~3 KiB struct) and
+            // avoids having to remember which depth-indexed history
+            // slots were touched by the previous search.
+            let mut pos = pos_from_deal(&deal);
+            pos.first[INI_DEPTH as usize] = leader as i32;
 
-                // Rebuild Pos from scratch — cheap (~3 KiB struct) and
-                // avoids having to remember which depth-indexed history
-                // slots were touched by the previous search.
-                let mut pos = pos_from_deal(&deal);
-                pos.first[INI_DEPTH as usize] = leader as i32;
+            // `set_deal` fills aggr/length/hand_dist/winner/
+            // second_best from `rank_in_suit` and calls `tt.init`.
+            self.engine.set_deal(&mut pos, &mut self.tt);
 
-                // `set_deal` fills aggr/length/hand_dist/winner/
-                // second_best from `rank_in_suit` and calls `tt.init`.
-                self.engine.set_deal(&mut pos, &mut self.tt);
-
-                let tricks = self.engine.search_target(&mut pos, &mut self.tt, INI_DEPTH);
-                debug_assert!((0..=13).contains(&tricks), "tricks out of range");
-                table.tricks[strain_idx][seat_idx] = tricks as u8;
-            }
+            let tricks = self.engine.search_target(&mut pos, &mut self.tt, INI_DEPTH);
+            debug_assert!((0..=13).contains(&tricks), "tricks out of range");
+            row[seat_idx] = tricks as u8;
         }
-
-        table
+        row
     }
 }
 
