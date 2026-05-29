@@ -8,48 +8,33 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
-# Allow the workflow to publish to GitHub Pages.
 permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-# Avoid overlapping deploys; let an in-progress run finish.
-concurrency:
-  group: pages
-  cancel-in-progress: false
+  contents: write
+  deployments: write
 
 jobs:
   bench:
-    name: Run benchmarks
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust stable
+        run: rustup toolchain install stable --profile minimal && rustup default stable
 
-      - uses: Swatinem/rust-cache@v2
+      - name: Run benchmark
+        run: cargo bench --bench solver -- --output-format bencher | tee bench-output.txt
 
-      - name: bench
-        run: cargo bench --bench solver
-
-      - name: Add root redirect to report
-        run: |
-          echo '<!DOCTYPE html><meta http-equiv="refresh" content="0; url=report/">' \
-            > target/criterion/index.html
-
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload report
-        uses: actions/upload-pages-artifact@v3
+      - name: Publish benchmark numbers
+        uses: benchmark-action/github-action-benchmark@v1
         with:
-          path: target/criterion
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          tool: cargo
+          output-file-path: bench-output.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: dev/bench
+          alert-threshold: 200%
+          comment-on-alert: false
+          fail-on-alert: false
