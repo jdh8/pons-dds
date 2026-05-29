@@ -630,11 +630,12 @@ impl Engine {
         pos.win_ranks[depth_u] = [0; DDS_SUITS];
         stat!(self.stats.node0_entries += 1;);
 
-        if depth >= 20 && (tricks as usize) < 12 {
-            if let Some(value) = self.tt_lookup(pos, tt, target, depth, tricks, hand) {
-                stat!(self.stats.exit_tt_early += 1;);
-                return value;
-            }
+        if depth >= 20
+            && (tricks as usize) < 12
+            && let Some(value) = self.tt_lookup(pos, tt, target, depth, tricks, hand)
+        {
+            stat!(self.stats.exit_tt_early += 1;);
+            return value;
         }
 
         if pos.tricks_max >= target {
@@ -688,11 +689,12 @@ impl Engine {
         }
 
         // ----- TT lookup (depth < 20 path) -----------------------------------
-        if depth < 20 && (tricks as usize) < 12 {
-            if let Some(value) = self.tt_lookup(pos, tt, target, depth, tricks, hand) {
-                stat!(self.stats.exit_tt_late += 1;);
-                return value;
-            }
+        if depth < 20
+            && (tricks as usize) < 12
+            && let Some(value) = self.tt_lookup(pos, tt, target, depth, tricks, hand)
+        {
+            stat!(self.stats.exit_tt_late += 1;);
+            return value;
         }
 
         // ----- Movegen + loop ------------------------------------------------
