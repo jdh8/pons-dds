@@ -22,7 +22,7 @@
 
 use contract_bridge::Strain;
 use contract_bridge::deck::full_deal;
-use dds_rs::{Solver, solve_deal_on};
+use pons_dds::{Solver, solve_deal_on};
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 use std::time::Instant;

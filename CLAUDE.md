@@ -1,4 +1,4 @@
-# dds-rs
+# pons-dds
 
 A pure-Rust double dummy solver for contract bridge.
 

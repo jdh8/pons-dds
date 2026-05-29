@@ -19,7 +19,7 @@ fn deals() -> Vec<FullDeal> {
 }
 
 fn solve_deal_sequential(deal: FullDeal) -> [[u8; 4]; 5] {
-    dds_rs::solve_deal_on(&mut dds_rs::Solver::new(Strain::Notrump), deal).tricks
+    pons_dds::solve_deal_on(&mut pons_dds::Solver::new(Strain::Notrump), deal).tricks
 }
 
 /// The rayon batch must produce the same answers as repeated
@@ -28,7 +28,7 @@ fn solve_deal_sequential(deal: FullDeal) -> [[u8; 4]; 5] {
 #[test]
 fn solve_deals_matches_single() {
     let deals = deals();
-    let batch = dds_rs::solve_deals(&deals);
+    let batch = pons_dds::solve_deals(&deals);
     for (i, &d) in deals.iter().enumerate() {
         assert_eq!(
             batch[i].tricks,

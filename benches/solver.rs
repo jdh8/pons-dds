@@ -13,7 +13,7 @@ use contract_bridge::deck::full_deal;
 use core::hint::black_box;
 use core::time::Duration;
 use criterion::{BatchSize, Criterion, Throughput, criterion_group, criterion_main};
-use dds_rs::{solve_deal, solve_deals};
+use pons_dds::{solve_deal, solve_deals};
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 

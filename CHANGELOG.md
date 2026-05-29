@@ -8,7 +8,7 @@ The format is based on Keep a Changelog.
 
 ## [0.1.0] - 2026-05-30
 
-Initial release of dds-rs, a pure-Rust double dummy solver for contract bridge.
+Initial release of pons-dds, a pure-Rust double dummy solver for contract bridge.
 
 ### Added
 
