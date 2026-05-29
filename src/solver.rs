@@ -335,6 +335,27 @@ pub fn solve_deal(deal: FullDeal) -> TrickCountTable {
         .unwrap_or_default()
 }
 
+/// Solve a single deal sequentially on `solver`, returning the full
+/// 5 × 4 [`TrickCountTable`].
+///
+/// The deterministic single-thread counterpart to [`solve_deal`]: it
+/// drives one per-strain [`Solver`] across all 5 strains in turn, on the
+/// calling thread, so the solver's engine diagnostics
+/// ([`Solver::search_stats`], [`Solver::bisection_stats`]) accumulate over
+/// the whole table. Reuse the same `solver` across deals to amortise its
+/// transposition-table allocation and gather corpus-wide statistics. For
+/// throughput-oriented solving, prefer the parallel [`solve_deal`] /
+/// [`solve_deals`].
+#[must_use]
+pub fn solve_deal_on(solver: &mut Solver, deal: FullDeal) -> TrickCountTable {
+    let mut table = TrickCountTable::default();
+    for (i, strain) in STRAINS.iter().enumerate() {
+        solver.set_strain(*strain);
+        table.tricks[i] = solver.solve(deal);
+    }
+    table
+}
+
 // ---------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------
@@ -345,18 +366,11 @@ mod tests {
     use contract_bridge::deal::Builder;
     use contract_bridge::hand::{Hand, Holding};
 
-    /// Sequentially solve all 5 strains of `deal` on a single per-strain
-    /// [`Solver`], returning the full 5 × 4 table. The deterministic
-    /// single-thread reference the parallel free functions are checked
-    /// against.
+    /// Solve a full deal on a fresh per-strain [`Solver`] — the
+    /// deterministic single-thread reference the parallel free functions
+    /// are checked against.
     fn solve_deal_sequential(deal: FullDeal) -> TrickCountTable {
-        let mut solver = Solver::new(Strain::Notrump);
-        let mut table = TrickCountTable::default();
-        for (i, strain) in STRAINS.iter().enumerate() {
-            solver.set_strain(*strain);
-            table.tricks[i] = solver.solve(deal);
-        }
-        table
+        solve_deal_on(&mut Solver::new(Strain::Notrump), deal)
     }
 
     /// Build a deal where each seat holds exactly one full 13-card suit:

@@ -9,21 +9,12 @@
 //!
 //! Run with `cargo run --release --example bisection_stats -- [N]`.
 
+use contract_bridge::Strain;
 use contract_bridge::deck::full_deal;
-use contract_bridge::{FullDeal, Strain};
-use dds_rs::Solver;
+use dds_rs::{Solver, solve_deal_on};
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 use std::time::Instant;
-
-/// Solve all 5 strains of `deal` on a single per-strain [`Solver`] so the
-/// engine's bisection counters accumulate across the whole 5 × 4 table.
-fn solve_full(solver: &mut Solver, deal: FullDeal) {
-    for strain in Strain::ASC {
-        solver.set_strain(strain);
-        std::hint::black_box(solver.solve(deal));
-    }
-}
 
 fn main() {
     let n: usize = std::env::args()
@@ -38,13 +29,13 @@ fn main() {
     let mut solver = Solver::new(Strain::Notrump);
     // One warmup pass to populate caches; not timed.
     for deal in &deals {
-        solve_full(&mut solver, *deal);
+        std::hint::black_box(solve_deal_on(&mut solver, *deal));
     }
     solver.reset_bisection_stats();
 
     let start = Instant::now();
     for deal in &deals {
-        solve_full(&mut solver, *deal);
+        std::hint::black_box(solve_deal_on(&mut solver, *deal));
     }
     let elapsed = start.elapsed();
 

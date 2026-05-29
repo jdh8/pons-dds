@@ -20,9 +20,9 @@
 //!   the ordered list fired the cutoff. Perfect ordering cuts on move 1;
 //!   the "all-node" share is nodes searched to exhaustion with no cutoff.
 
+use contract_bridge::Strain;
 use contract_bridge::deck::full_deal;
-use contract_bridge::{FullDeal, Strain};
-use dds_rs::Solver;
+use dds_rs::{Solver, solve_deal_on};
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 use std::time::Instant;
@@ -33,15 +33,6 @@ fn pct(num: u64, den: u64) -> f64 {
         0.0
     } else {
         100.0 * num as f64 / den as f64
-    }
-}
-
-/// Solve all 5 strains of `deal` on a single per-strain [`Solver`] so the
-/// engine's per-node counters accumulate across the whole 5 × 4 table.
-fn solve_full(solver: &mut Solver, deal: FullDeal) {
-    for strain in Strain::ASC {
-        solver.set_strain(strain);
-        std::hint::black_box(solver.solve(deal));
     }
 }
 
@@ -58,13 +49,13 @@ fn main() {
     let mut solver = Solver::new(Strain::Notrump);
     // Warmup pass (not measured): populate any first-touch caches.
     for deal in &deals {
-        solve_full(&mut solver, *deal);
+        std::hint::black_box(solve_deal_on(&mut solver, *deal));
     }
     solver.reset_search_stats();
 
     let start = Instant::now();
     for deal in &deals {
-        solve_full(&mut solver, *deal);
+        std::hint::black_box(solve_deal_on(&mut solver, *deal));
     }
     let elapsed = start.elapsed();
 

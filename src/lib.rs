@@ -12,8 +12,9 @@
 //! This release ships the [`Solver`] API: a per-strain solver that
 //! produces one strain's row of a [`TrickCountTable`] for a [`FullDeal`],
 //! plus rayon-parallel [`solve_deal`] (single-deal) and [`solve_deals`]
-//! (batch) helpers that assemble the full 5 × 4 table. The internal
-//! substrate (position state, move generator, search engine,
+//! (batch) helpers that assemble the full 5 × 4 table, and the sequential
+//! single-thread [`solve_deal_on`] for deterministic profiling. The
+//! internal substrate (position state, move generator, search engine,
 //! transposition table, and friends) remains crate-private.
 //!
 //! # Algorithm reference
@@ -57,4 +58,4 @@ pub(crate) mod tt;
 
 pub use contract_bridge::FullDeal;
 pub use search::SearchStats;
-pub use solver::{Solver, TrickCountTable, solve_deal, solve_deals};
+pub use solver::{Solver, TrickCountTable, solve_deal, solve_deal_on, solve_deals};

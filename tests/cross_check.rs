@@ -23,17 +23,11 @@ fn deals() -> Vec<FullDeal> {
     (0..N).map(|_| full_deal(&mut rng)).collect()
 }
 
-/// Sequentially solve all 5 strains of `deal` on one per-strain
-/// [`dds_rs::Solver`], returning the raw `[strain][seat]` matrix. The
-/// deterministic single-thread reference for the parallel free functions.
+/// Solve a full deal on a fresh per-strain [`dds_rs::Solver`], returning
+/// the raw `[strain][seat]` matrix. The deterministic single-thread
+/// reference for the parallel free functions.
 fn solve_deal_sequential(deal: FullDeal) -> [[u8; 4]; 5] {
-    let mut solver = dds_rs::Solver::new(Strain::Notrump);
-    let mut out = [[0u8; 4]; 5];
-    for (i, strain) in Strain::ASC.into_iter().enumerate() {
-        solver.set_strain(strain);
-        out[i] = solver.solve(deal);
-    }
-    out
+    dds_rs::solve_deal_on(&mut dds_rs::Solver::new(Strain::Notrump), deal).tricks
 }
 
 /// Lower a [`ddss::TrickCountTable`] into the raw `[strain][seat]`

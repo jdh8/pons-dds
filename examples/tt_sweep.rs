@@ -17,19 +17,10 @@
 
 use contract_bridge::deck::full_deal;
 use contract_bridge::{FullDeal, Strain};
-use dds_rs::Solver;
+use dds_rs::{Solver, solve_deal_on};
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 use std::time::Instant;
-
-/// Solve all 5 strains of `deal` on a single per-strain [`Solver`] so the
-/// TT and per-node counters accumulate across the whole 5 × 4 table.
-fn solve_full(solver: &mut Solver, deal: FullDeal) {
-    for strain in Strain::ASC {
-        solver.set_strain(strain);
-        std::hint::black_box(solver.solve(deal));
-    }
-}
 
 /// `(default_mb, max_mb)` budgets to probe. One page is ≈6.4 MiB, so
 /// the smallest few collapse to 1–2 pages.
@@ -56,12 +47,12 @@ fn measure(default_mb: u32, max_mb: u32, deals: &[FullDeal]) -> Row {
     let mut solver = Solver::with_memory(Strain::Notrump, default_mb, max_mb);
     // Warmup (not timed): fault in pages, warm the TT for this budget.
     for deal in deals {
-        solve_full(&mut solver, *deal);
+        std::hint::black_box(solve_deal_on(&mut solver, *deal));
     }
     solver.reset_search_stats();
     let start = Instant::now();
     for deal in deals {
-        solve_full(&mut solver, *deal);
+        std::hint::black_box(solve_deal_on(&mut solver, *deal));
     }
     let elapsed = start.elapsed();
 
