@@ -1,6 +1,9 @@
 # dds-rs
 
 [![CI](https://github.com/jdh8/dds-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/jdh8/dds-rs/actions/workflows/ci.yml)
+[![Crates.io](https://img.shields.io/crates/v/dds-rs.svg)](https://crates.io/crates/dds-rs)
+[![Docs.rs](https://docs.rs/dds-rs/badge.svg)](https://docs.rs/dds-rs)
+[![Benchmarks](https://img.shields.io/badge/benchmarks-published-blue?logo=github)](https://jdh8.github.io/dds-rs/dev/bench/)
 
 Pure-Rust double dummy solver for contract bridge.
 No C++ compiler required — compiles anywhere Rust runs.
