@@ -13,7 +13,7 @@ use contract_bridge::deck::full_deal;
 use core::hint::black_box;
 use core::time::Duration;
 use criterion::{BatchSize, Criterion, Throughput, criterion_group, criterion_main};
-use dds_rs::{Solver, solve_deals};
+use dds_rs::{Solver, solve_deal_parallel, solve_deals};
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 
@@ -30,6 +30,20 @@ fn bench_solve_deal_single(c: &mut Criterion) {
         b.iter_batched(
             || full_deal(&mut rng),
             |deal| black_box(solver.solve_deal(black_box(deal))),
+            BatchSize::SmallInput,
+        );
+    });
+}
+
+/// Single-deal latency via the strain-parallel entry point. Compare
+/// against `solve_deal_single` to see the within-deal speedup from
+/// spreading the 5 strains across rayon workers.
+fn bench_solve_deal_parallel_single(c: &mut Criterion) {
+    let mut rng = SmallRng::seed_from_u64(0);
+    c.bench_function("solve_deal_parallel_single", |b| {
+        b.iter_batched(
+            || full_deal(&mut rng),
+            |deal| black_box(solve_deal_parallel(black_box(deal))),
             BatchSize::SmallInput,
         );
     });
@@ -57,5 +71,10 @@ fn bench_solve_deals(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_solve_deal_single, bench_solve_deals);
+criterion_group!(
+    benches,
+    bench_solve_deal_single,
+    bench_solve_deal_parallel_single,
+    bench_solve_deals
+);
 criterion_main!(benches);
