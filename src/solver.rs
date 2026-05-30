@@ -19,7 +19,7 @@ use crate::quick_tricks::{MAXNODE, MINNODE};
 use crate::search::Engine;
 use crate::tt::TransTable;
 use contract_bridge::{FullDeal, Seat, Strain, Suit};
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use std::sync::OnceLock;
 
 /// All five strains in [`TrickCountTable`] row order (Clubs, Diamonds,
 /// Hearts, Spades, Notrump). Matches `Strain::ASC`.
@@ -269,55 +269,167 @@ impl Default for Solver {
 // Parallel batch
 // ---------------------------------------------------------------------
 
-/// Solve a batch of deals in parallel.
+/// Per-worker stack size for the solver thread pool (`solver_pool`).
 ///
-/// The unit of work is a single **(deal, strain)** pair, not a whole
-/// deal: a one-deal batch therefore spreads its 5 strains across up to 5
-/// rayon workers, and a large batch yields `5 × deals.len()` tasks for
-/// finer load-balancing. The 4 declarers of a strain stay on one task so
-/// the per-strain transposition table still warms across them (see
-/// [`Solver::solve`]).
+/// The alpha-beta search recurses up to ~52 plies with large per-frame
+/// working sets (hence the `large_stack_*` allows in `lib.rs`), so a single
+/// solve can want several MiB of stack — more than rayon's ~2 MiB default
+/// worker stack, which it overflows. This is virtual address space; only
+/// each worker's high-water mark is committed.
+const SOLVER_STACK_SIZE: usize = 16 * 1024 * 1024;
+
+/// Process-wide thread pool for batch solving, built once on first use.
 ///
-/// Each rayon worker amortises its own [`Solver`] (and the associated
-/// transposition-table allocation) across the tasks routed to it via a
-/// [`std::thread_local!`] handle. Order of results matches the order of
-/// `deals`.
+/// Dedicated rather than rayon's global pool for two reasons: its workers
+/// get the large `SOLVER_STACK_SIZE` stacks the search needs, and owning the
+/// pool keeps each worker's persistent [`Solver`] (and its warm
+/// transposition table) alive across calls. Thread count follows rayon's
+/// usual default (`RAYON_NUM_THREADS`, else the available parallelism).
+fn solver_pool() -> &'static rayon::ThreadPool {
+    static POOL: OnceLock<rayon::ThreadPool> = OnceLock::new();
+    POOL.get_or_init(|| {
+        rayon::ThreadPoolBuilder::new()
+            .stack_size(SOLVER_STACK_SIZE)
+            .thread_name(|i| format!("pons-dds-solver-{i}"))
+            .build()
+            .expect("failed to build pons-dds solver thread pool")
+    })
+}
+
+/// Whether a strain's tasks should be dispatched ahead of the rest.
 ///
-/// This is the recommended entry point for solving many deals at once;
-/// for low-latency solving of a single deal see [`solve_deal`].
-#[must_use]
-pub fn solve_deals(deals: &[FullDeal]) -> Vec<TrickCountTable> {
+/// Notrump carries by far the heaviest solve-time tail: with no trump there
+/// is no forced cross-ruff ending for the quick-/later-tricks heuristics to
+/// claim, so its worst cases blow the search up hardest. Per-strain *means*
+/// are nearly equal, so this changes makespan, not total work — starting the
+/// tail-risky tasks first keeps a long notrump solve from landing last and
+/// defining the finish time. Tune against `examples/par_balance.rs` on the
+/// target host.
+const fn dispatch_first(strain_idx: usize) -> bool {
+    matches!(STRAINS[strain_idx], Strain::Notrump)
+}
+
+/// Drive `deals` through `solver_pool` with an explicit per-thread
+/// transposition-table budget, returning one [`TrickCountTable`] per deal.
+///
+/// The work unit is one **(deal, strain)** pair — the 4 declarers of a
+/// strain stay together so the per-strain table warms across them. Tasks are
+/// ordered tail-risky-first (`dispatch_first`), then split into a bounded
+/// number of work-stealing chunks. Bounding the chunk count caps rayon's
+/// split-recursion depth (independent of batch size), so the deep search runs
+/// from a shallow rayon stack — in a plain loop within each chunk — and worker
+/// stack use does not grow with the batch. Work-stealing across the chunks
+/// balances the cores without a contended shared counter.
+fn solve_deals_pooled(deals: &[FullDeal], default_mb: u32, max_mb: u32) -> Vec<TrickCountTable> {
+    use rayon::iter::ParallelIterator;
+    use rayon::slice::ParallelSlice;
     use std::cell::RefCell;
 
+    // Per-worker solver, parked in thread-local storage so it stays off the
+    // deep search stack and warms across calls. The budget rides alongside it
+    // so a worker rebuilds its table only when the budget changes.
     thread_local! {
-        static SOLVER: RefCell<Solver> = RefCell::new(Solver::new(Strain::Notrump));
+        static SOLVER: RefCell<Option<(u32, u32, Solver)>> = const { RefCell::new(None) };
     }
 
-    // Flatten to (deal, strain) work-units. The 4 declarers of a strain
-    // share one unit to preserve intra-strain TT reuse.
-    let tasks: Vec<(usize, usize)> = (0..deals.len())
+    let mut tasks: Vec<(usize, usize)> = (0..deals.len())
         .flat_map(|d| (0..STRAINS.len()).map(move |s| (d, s)))
         .collect();
+    // Stable: tail-risky strains first, deal order preserved within a rank.
+    tasks.sort_by_key(|&(_, s)| core::cmp::Reverse(dispatch_first(s)));
 
-    let rows: Vec<(usize, usize, [u8; 4])> = tasks
-        .par_iter()
-        .map(|&(d, s)| {
-            let row = SOLVER.with(|cell| {
-                let mut solver = cell.borrow_mut();
-                solver.set_strain(STRAINS[s]);
-                solver.solve(deals[d])
-            });
-            (d, s, row)
-        })
-        .collect();
+    let pool = solver_pool();
+    // Enough chunks for work-stealing to balance, few enough to keep rayon's
+    // split depth (hence the search's rayon-stack nesting) bounded.
+    let target_chunks = pool.current_num_threads().saturating_mul(8).max(1);
+    let chunk_size = tasks.len().div_ceil(target_chunks).max(1);
 
-    // Scatter the (deal, strain) rows back into per-deal tables. Each
-    // (d, s) is unique, so order of application does not matter.
+    let collected: Vec<Vec<(usize, usize, [u8; 4])>> = pool.install(|| {
+        tasks
+            .par_chunks(chunk_size)
+            .map(|chunk| {
+                SOLVER.with(|cell| {
+                    let mut slot = cell.borrow_mut();
+                    // Rebuild only when the requested budget changed.
+                    if !matches!(slot.as_ref(), Some(&(d_mb, m_mb, _)) if d_mb == default_mb && m_mb == max_mb)
+                    {
+                        *slot = None;
+                    }
+                    let solver = &mut slot
+                        .get_or_insert_with(|| {
+                            (
+                                default_mb,
+                                max_mb,
+                                Solver::with_memory(Strain::Notrump, default_mb, max_mb),
+                            )
+                        })
+                        .2;
+
+                    let mut rows = Vec::with_capacity(chunk.len());
+                    for &(d, s) in chunk {
+                        solver.set_strain(STRAINS[s]);
+                        rows.push((d, s, solver.solve(deals[d])));
+                    }
+                    rows
+                })
+            })
+            .collect()
+    });
+
+    // Scatter results back via each task's (deal, strain) pair.
     let mut tables = vec![TrickCountTable::default(); deals.len()];
-    for (d, s, row) in rows {
+    for (d, s, row) in collected.into_iter().flatten() {
         tables[d].tricks[s] = row;
     }
     tables
+}
+
+/// Solve a batch of deals in parallel.
+///
+/// The unit of work is a single **(deal, strain)** pair: a one-deal batch
+/// spreads its 5 strains across workers, and a large batch yields
+/// `5 × deals.len()` tasks for fine-grained load balancing. The 4 declarers
+/// of a strain stay on one task so the per-strain transposition table warms
+/// across them (see [`Solver::solve`]).
+///
+/// Solving runs on a dedicated, persistent thread pool whose workers each
+/// keep a warm [`Solver`] across calls; tasks are self-scheduled
+/// tail-risky-first. Order of results matches the order of `deals`.
+///
+/// This is the recommended entry point for solving many deals at once; for
+/// low-latency solving of a single deal see [`solve_deal`].
+#[must_use]
+pub fn solve_deals(deals: &[FullDeal]) -> Vec<TrickCountTable> {
+    solve_deals_pooled(
+        deals,
+        crate::tt::DEFAULT_MEMORY_MB,
+        crate::tt::MAX_MEMORY_MB,
+    )
+}
+
+/// Solve a batch of deals in parallel with an explicit per-thread
+/// transposition-table memory budget, in MiB.
+///
+/// Identical in result to [`solve_deals`], but each pool worker builds its
+/// [`Solver`] with [`Solver::with_memory`] (`default_mb` / `max_mb`) instead
+/// of the built-in defaults. Use it to **cap per-thread memory** in highly
+/// parallel runs — the table is per-thread, so the aggregate footprint is
+/// roughly `threads × max_mb` MiB — or to sweep the budget for tuning (see
+/// `examples/tt_sweep.rs`).
+///
+/// Like [`solve_deals`], each worker parks its [`Solver`] in `thread_local`
+/// storage and reuses it across the tasks routed to it — and across calls,
+/// so long as the requested budget is unchanged. A worker rebuilds its
+/// table only when `default_mb` / `max_mb` differ from its previous call
+/// (e.g. between sweep rows). For repeated batches at the default budget,
+/// prefer [`solve_deals`].
+#[must_use]
+pub fn solve_deals_with_memory(
+    deals: &[FullDeal],
+    default_mb: u32,
+    max_mb: u32,
+) -> Vec<TrickCountTable> {
+    solve_deals_pooled(deals, default_mb, max_mb)
 }
 
 /// Solve a single deal, spreading its 5 strains across rayon workers.

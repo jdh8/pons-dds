@@ -33,4 +33,6 @@ pub(crate) mod tt;
 
 pub use contract_bridge::FullDeal;
 pub use search::SearchStats;
-pub use solver::{Solver, TrickCountTable, solve_deal, solve_deal_on, solve_deals};
+pub use solver::{
+    Solver, TrickCountTable, solve_deal, solve_deal_on, solve_deals, solve_deals_with_memory,
+};
