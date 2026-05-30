@@ -1,6 +1,6 @@
 # pons-dds
 
-[![CI](https://github.com/jdh8/pons-dds/actions/workflows/ci.yml/badge.svg)](https://github.com/jdh8/pons-dds/actions/workflows/ci.yml)
+[![CI](https://github.com/jdh8/pons-dds/actions/workflows/rust.yml/badge.svg)](https://github.com/jdh8/pons-dds/actions/workflows/rust.yml)
 [![Crates.io](https://img.shields.io/crates/v/pons-dds.svg)](https://crates.io/crates/pons-dds)
 [![Docs.rs](https://docs.rs/pons-dds/badge.svg)](https://docs.rs/pons-dds)
 [![Benchmarks](https://img.shields.io/badge/benchmarks-published-blue?logo=github)](https://jdh8.github.io/pons-dds/dev/bench/)
