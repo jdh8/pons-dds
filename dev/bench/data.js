@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1780129350768,
+  "lastUpdate": 1780130365669,
   "repoUrl": "https://github.com/jdh8/pons-dds",
   "entries": {
     "Benchmark": [
@@ -209,6 +209,48 @@ window.BENCHMARK_DATA = {
             "name": "solve_deals/200",
             "value": 22657737425,
             "range": "± 218328942",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "committer": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "distinct": true,
+          "id": "9a1282035e907dafd01a6d9223c5f4b008bec003",
+          "message": "Rewrite 0.1.0 changelog to describe purpose and API\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+          "timestamp": "2026-05-30T16:32:58+08:00",
+          "tree_id": "2c2d38244f616d65e6728ca8ccd647f81e1cd5c1",
+          "url": "https://github.com/jdh8/pons-dds/commit/9a1282035e907dafd01a6d9223c5f4b008bec003"
+        },
+        "date": 1780130365397,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "solve_deal",
+            "value": 100855893,
+            "range": "± 230697038",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/32",
+            "value": 3272689410,
+            "range": "± 25158556",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/200",
+            "value": 22595780223,
+            "range": "± 436527852",
             "unit": "ns/iter"
           }
         ]
