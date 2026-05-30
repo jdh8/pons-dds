@@ -6,6 +6,14 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+### Documentation
+
+- Add an Acknowledgements section to the README crediting the ported lineage:
+  [DDS](https://github.com/dds-bridge/dds) (Bo Haglund and Soren Hein),
+  [Robert Salita's ddss fork](https://github.com/bsalita/ddss) that supplies the
+  vendored DDS 2.9.0 sources, and the [`ddss`](https://github.com/jdh8/ddss) /
+  `ddss-sys` FFI crates.
+
 ## [0.1.0] - 2026-05-30
 
 Initial release of pons-dds, a pure-Rust double dummy solver for contract

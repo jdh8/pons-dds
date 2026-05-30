@@ -57,6 +57,23 @@ repositories: `ddss/benches/compare_pons_dds.rs` and
 ddss-sys and dds-bridge-sys both vendor the DDS C++ symbols and cannot
 link into the same binary.
 
+## Acknowledgements
+
+pons-dds is a line-by-line pure-Rust port of the [DDS][dds] double dummy
+solver by Bo Haglund and Soren Hein — specifically the DDS 2.9.0 engine as
+carried by [Robert Salita's `ddss` fork][ddss-c], whose C++ sources are
+vendored under `ddss-sys/vendor/src/` and cited per-module throughout this
+crate's source. The alpha-beta search, transposition table, and move-ordering
+heuristics all follow that reference; only the language and memory-safety
+scaffolding are new. The same C++ engine is reachable from Rust through the
+[`ddss`][ddss-rs] / [`ddss-sys`](https://crates.io/crates/ddss-sys) FFI crates,
+which pons-dds benchmarks against above. Like DDS and ddss, pons-dds is licensed
+under Apache-2.0.
+
+[dds]: https://github.com/dds-bridge/dds
+[ddss-c]: https://github.com/bsalita/ddss
+[ddss-rs]: https://github.com/jdh8/ddss
+
 ## License
 
 [Apache-2.0](LICENSE)
