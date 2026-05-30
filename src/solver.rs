@@ -95,7 +95,7 @@ impl TrickCountTable {
 ///
 /// Bound to a single strain (set at [`Self::new`], retargetable via
 /// [`Self::set_strain`]) and owns a search engine and a transposition
-/// table, mirroring the per-strain [`Engine`]. [`Self::solve`] runs all
+/// table, mirroring the per-strain `Engine`. [`Self::solve`] runs all
 /// 4 declarers of the configured strain for a deal; for a full 5 × 4
 /// table across every strain use the free [`solve_deal`] / [`solve_deals`].
 ///
@@ -128,8 +128,8 @@ impl Solver {
     /// Create a solver for `strain` with an explicit transposition-table
     /// memory budget, in MiB: `default_mb` is the size the table shrinks
     /// back to on reset (per solve), `max_mb` the ceiling before a full
-    /// reset is forced. [`Self::new`] uses
-    /// [`crate::tt::DEFAULT_MEMORY_MB`] / [`crate::tt::MAX_MEMORY_MB`].
+    /// reset is forced. [`Self::new`] uses the built-in defaults
+    /// (`DEFAULT_MEMORY_MB` / `MAX_MEMORY_MB`).
     ///
     /// Bigger is better up to a plateau: a starved table full-resets and
     /// re-searches, so undersizing it explodes the node count (16/32 MiB
@@ -152,7 +152,7 @@ impl Solver {
     }
 
     /// Solve the configured strain (all 4 declarers) of `deal`, returning
-    /// the per-seat trick row in [`SEATS`] order (North, East, South,
+    /// the per-seat trick row in seat order (North, East, South,
     /// West).
     ///
     /// Resets the transposition table for the strain's trump, then reuses

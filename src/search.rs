@@ -73,7 +73,7 @@ macro_rules! stat {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SearchStats {
     // ---- Node-0 (lead) early-exit funnel ----
-    /// Times [`Engine::ab_search_0`] was entered.
+    /// Times `Engine::ab_search_0` was entered.
     pub node0_entries: u64,
     /// Returned via the `depth >= 20` TT probe.
     pub exit_tt_early: u64,
