@@ -54,9 +54,9 @@ crate-private.
 
 ## Performance
 
-Benchmarked with `cargo bench` (seed 0, 200 random deals, 32-core machine).
+Benchmarked with `cargo bench` (seed 0, 200 random deals, 16c/32t machine).
 
-| Engine                            | Serial (1 thr)      | Parallel (32 cores) |
+| Engine                            | Serial (1 thr)      | Parallel (32 thr)   |
 |-----------------------------------|---------------------|---------------------|
 | ddss 0.1 (DDS 2.9, C++ FFI)       | 131.5 ms/deal       | 9.9 ms/deal         |
 | **pons-dds (DDS 2.9, pure Rust)** | **149.3 ms/deal**   | **13.2 ms/deal**    |
