@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1780130784595,
+  "lastUpdate": 1780131212642,
   "repoUrl": "https://github.com/jdh8/pons-dds",
   "entries": {
     "Benchmark": [
@@ -293,6 +293,48 @@ window.BENCHMARK_DATA = {
             "name": "solve_deals/200",
             "value": 17940568083,
             "range": "± 415863506",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "committer": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "distinct": true,
+          "id": "c8bc2f09176f7391c18b4b32d432eeab966a6802",
+          "message": "Update link to CI",
+          "timestamp": "2026-05-30T16:46:34+08:00",
+          "tree_id": "745fa53e651edad3bd970ac29c289b410e75b435",
+          "url": "https://github.com/jdh8/pons-dds/commit/c8bc2f09176f7391c18b4b32d432eeab966a6802"
+        },
+        "date": 1780131211816,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "solve_deal",
+            "value": 107559558,
+            "range": "± 225619336",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/32",
+            "value": 3678486317,
+            "range": "± 17798637",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/200",
+            "value": 25362750632,
+            "range": "± 96152302",
             "unit": "ns/iter"
           }
         ]
