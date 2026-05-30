@@ -1,75 +1,77 @@
-//! Sweeps the transposition-table memory budget to find the
+//! Sweeps the transposition-table memory budget to find the **parallel**
 //! throughput sweet spot.
 //!
-//! The solver is memory-latency bound (≈27% of cycles lost to
-//! cache-misses on the ~95 MiB TT). A smaller table trades hit rate for
-//! cache residency; this sweep measures where that trade nets out on a
-//! fixed deal corpus.
+//! The solver is memory bound: a bigger table lifts the TT hit rate (fewer
+//! re-searches) but, replicated across every `rayon` worker, a large table
+//! also stresses the shared memory bus and last-level cache. The
+//! single-threaded optimum (~160 MiB) is therefore *not* the parallel
+//! optimum — under contention a smaller per-thread table can win. This
+//! sweep measures where that trade nets out on a fixed deal corpus, on
+//! however many cores `rayon` is using.
 //!
 //! ```text
-//! cargo run --release --example tt_sweep -- [N]
-//! # add --features profiling to also fill the TT hit-rate column
+//! cargo run --release --example tt_sweep -- [N]          # all cores (parallel)
+//! RAYON_NUM_THREADS=1 cargo run --release --example tt_sweep -- [N]   # serial reference
 //! ```
 //!
-//! Each row reports single-threaded ms/deal (lower is better) for a
-//! `(default_mb, max_mb)` budget; speedup is vs the current default
-//! (95 / 160 MiB).
+//! Each row reports wall-clock ms/deal (lower is better) for a
+//! `(default_mb, max_mb)` budget across the active thread pool; speedup is
+//! vs the current default ([`pons_dds`]'s 160 / 256 MiB).
+//!
+//! Note: [`solve_deals_with_memory`] builds fresh per-worker solvers each
+//! call, so per-worker TT warmup is paid inside the timed call. Pick an `N`
+//! large enough (the default is sized for that) that warmup amortises to
+//! noise — at 32 cores each worker then handles dozens of tasks.
 
+use contract_bridge::FullDeal;
 use contract_bridge::deck::full_deal;
-use contract_bridge::{FullDeal, Strain};
-use pons_dds::{Solver, solve_deal_on};
+use core::hint::black_box;
+use pons_dds::solve_deals_with_memory;
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 use std::time::Instant;
 
 /// `(default_mb, max_mb)` budgets to probe. One page is ≈6.4 MiB, so
-/// the smallest few collapse to 1–2 pages.
+/// the smallest few collapse to a handful of pages. Probes well below the
+/// single-threaded optimum to expose the parallel sweet spot.
 const BUDGETS: &[(u32, u32)] = &[
     (16, 32),
+    (32, 48),
     (48, 64),
     (64, 96),
-    (95, 160), // current default
-    (160, 256),
-    (256, 384),
-    (512, 768),
+    (95, 160),
+    (128, 192),
+    (160, 256), // current default
 ];
 
-const DEFAULT_BUDGET: (u32, u32) = (95, 160);
+/// The crate's current default budget ([`pons_dds::Solver::new`]).
+const DEFAULT_BUDGET: (u32, u32) = (160, 256);
 
 struct Row {
     default_mb: u32,
     max_mb: u32,
     ms_per_deal: f64,
-    hit_pct: f64,
 }
 
+#[allow(clippy::cast_precision_loss)]
 fn measure(default_mb: u32, max_mb: u32, deals: &[FullDeal]) -> Row {
-    let mut solver = Solver::with_memory(Strain::Notrump, default_mb, max_mb);
-    // Warmup (not timed): fault in pages, warm the TT for this budget.
-    for deal in deals {
-        std::hint::black_box(solve_deal_on(&mut solver, *deal));
-    }
-    solver.reset_search_stats();
-    let start = Instant::now();
-    for deal in deals {
-        std::hint::black_box(solve_deal_on(&mut solver, *deal));
-    }
-    let elapsed = start.elapsed();
+    // Warm up (untimed): build and fault each worker's table at this budget.
+    // `solve_deals_with_memory` parks solvers in thread-local storage and
+    // rebuilds only on a budget change, so the timed call below reuses these
+    // warm tables — steady state, matching how `solve_deals` reuses tables
+    // across calls in production.
+    black_box(solve_deals_with_memory(deals, default_mb, max_mb));
 
-    let s = solver.search_stats();
-    #[allow(clippy::cast_precision_loss)]
-    let hit_pct = if s.tt_lookups == 0 {
-        f64::NAN
-    } else {
-        100.0 * s.tt_hits as f64 / s.tt_lookups as f64
-    };
-    #[allow(clippy::cast_precision_loss)]
+    let start = Instant::now();
+    let tables = solve_deals_with_memory(black_box(deals), default_mb, max_mb);
+    let elapsed = start.elapsed();
+    black_box(tables);
+
     let ms_per_deal = elapsed.as_secs_f64() * 1000.0 / deals.len() as f64;
     Row {
         default_mb,
         max_mb,
         ms_per_deal,
-        hit_pct,
     }
 }
 
@@ -77,7 +79,7 @@ fn main() {
     let n: usize = std::env::args()
         .nth(1)
         .and_then(|s| s.parse().ok())
-        .unwrap_or(200);
+        .unwrap_or(500);
 
     let mut rng = SmallRng::seed_from_u64(0);
     let deals: Vec<_> = (0..n).map(|_| full_deal(&mut rng)).collect();
@@ -92,26 +94,22 @@ fn main() {
         .find(|r| (r.default_mb, r.max_mb) == DEFAULT_BUDGET)
         .map_or(f64::NAN, |r| r.ms_per_deal);
 
-    println!("deals: {n}  (single-threaded, seed 0)\n");
+    let threads = rayon::current_num_threads();
+    println!("deals: {n}  threads: {threads}  (seed 0)\n");
     println!(
-        "{:>9} {:>9} {:>11} {:>9} {:>10}",
-        "default", "max", "ms/deal", "speedup", "TT hit %"
+        "{:>9} {:>9} {:>11} {:>9}",
+        "default", "max", "ms/deal", "speedup"
     );
     for r in &rows {
         let speedup = default_ms / r.ms_per_deal;
-        let hit = if r.hit_pct.is_nan() {
-            "n/a".to_string()
-        } else {
-            format!("{:.1}", r.hit_pct)
-        };
         let tag = if (r.default_mb, r.max_mb) == DEFAULT_BUDGET {
             "  <- default"
         } else {
             ""
         };
         println!(
-            "{:>5} MiB {:>5} MiB {:>11.3} {:>8.3}x {:>10}{tag}",
-            r.default_mb, r.max_mb, r.ms_per_deal, speedup, hit
+            "{:>5} MiB {:>5} MiB {:>11.3} {:>8.3}x{tag}",
+            r.default_mb, r.max_mb, r.ms_per_deal, speedup
         );
     }
 }
