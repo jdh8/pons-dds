@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1780131212642,
+  "lastUpdate": 1780131836569,
   "repoUrl": "https://github.com/jdh8/pons-dds",
   "entries": {
     "Benchmark": [
@@ -335,6 +335,48 @@ window.BENCHMARK_DATA = {
             "name": "solve_deals/200",
             "value": 25362750632,
             "range": "± 96152302",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "committer": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "distinct": true,
+          "id": "c1bc3a30f93e12b8bbee54953293b7f2663af2a8",
+          "message": "Use README.md as crate docs via include_str!\n\nAlign pons-dds with the other workspace crates (pons, ddss,\ncontract-bridge), whose lib.rs starts with\n`#![doc = include_str!(\"../README.md\")]` for a single source of truth.\n\n- Fold the inline v0.1-scope docs into a new README \"Scope\" section.\n- Merge the per-module / ABsearch.cpp algorithm-reference note into the\n  existing Acknowledgements paragraph, dropping the broken relative link.\n- Turn the README usage blocks into real, passing doctests (use\n  `.unwrap()`, define `deals`, add hidden setup for the second block).\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+          "timestamp": "2026-05-30T16:58:18+08:00",
+          "tree_id": "d8d1d182b6c6f8aaa36aa93ba9f6d49596284917",
+          "url": "https://github.com/jdh8/pons-dds/commit/c1bc3a30f93e12b8bbee54953293b7f2663af2a8"
+        },
+        "date": 1780131835771,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "solve_deal",
+            "value": 80621566,
+            "range": "± 184513250",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/32",
+            "value": 2622309720,
+            "range": "± 14331940",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/200",
+            "value": 17823525069,
+            "range": "± 66831310",
             "unit": "ns/iter"
           }
         ]
