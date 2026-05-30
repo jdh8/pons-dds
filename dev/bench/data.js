@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1780139663373,
+  "lastUpdate": 1780167412156,
   "repoUrl": "https://github.com/jdh8/pons-dds",
   "entries": {
     "Benchmark": [
@@ -419,6 +419,48 @@ window.BENCHMARK_DATA = {
             "name": "solve_deals/200",
             "value": 22009940771,
             "range": "± 362999408",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "committer": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "distinct": true,
+          "id": "85e3451597a3e4faf85271f2ac91bcfcd9ebfb5f",
+          "message": "Add parallel TT-budget sweep and load-balance diagnostics\n\ntt_sweep now sweeps the TT budget warm across the whole pool instead of\nsingle-threaded; new par_balance reports the makespan tail ratio and per-strain\nsolve-time distribution. Both help tune task dispatch and TT sizing on a given\nmachine.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+          "timestamp": "2026-05-31T02:50:20+08:00",
+          "tree_id": "29740693a98b8eb5c1e93b36e3e6297b7c4dde0a",
+          "url": "https://github.com/jdh8/pons-dds/commit/85e3451597a3e4faf85271f2ac91bcfcd9ebfb5f"
+        },
+        "date": 1780167411866,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "solve_deal",
+            "value": 101102350,
+            "range": "± 206051167",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/32",
+            "value": 3487246020,
+            "range": "± 108286429",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/200",
+            "value": 23291317277,
+            "range": "± 732796410",
             "unit": "ns/iter"
           }
         ]
