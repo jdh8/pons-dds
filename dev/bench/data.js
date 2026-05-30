@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1780125995387,
+  "lastUpdate": 1780129350768,
   "repoUrl": "https://github.com/jdh8/pons-dds",
   "entries": {
     "Benchmark": [
@@ -167,6 +167,48 @@ window.BENCHMARK_DATA = {
             "name": "solve_deals/200",
             "value": 22483072950,
             "range": "± 203979046",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "committer": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "distinct": true,
+          "id": "df48e50f76b80e469bbd0f0b818204d895f3fb1c",
+          "message": "Add Apache-2.0 LICENSE file for 0.1.0 release\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+          "timestamp": "2026-05-30T16:13:19+08:00",
+          "tree_id": "306132dc1945b518e71ce92490a8426fa34e38b3",
+          "url": "https://github.com/jdh8/pons-dds/commit/df48e50f76b80e469bbd0f0b818204d895f3fb1c"
+        },
+        "date": 1780129350490,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "solve_deal",
+            "value": 102011595,
+            "range": "± 226096074",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/32",
+            "value": 3287412562,
+            "range": "± 45163163",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/200",
+            "value": 22657737425,
+            "range": "± 218328942",
             "unit": "ns/iter"
           }
         ]
