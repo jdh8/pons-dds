@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1780130365669,
+  "lastUpdate": 1780130784595,
   "repoUrl": "https://github.com/jdh8/pons-dds",
   "entries": {
     "Benchmark": [
@@ -251,6 +251,48 @@ window.BENCHMARK_DATA = {
             "name": "solve_deals/200",
             "value": 22595780223,
             "range": "± 436527852",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "committer": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "distinct": true,
+          "id": "6acf889c3a4c5a966f88c95a0eca81387e26effc",
+          "message": "Credit DDS/ddss lineage in README acknowledgements",
+          "timestamp": "2026-05-30T16:40:43+08:00",
+          "tree_id": "8256c8e489502035b6701946159f12763c6a1be1",
+          "url": "https://github.com/jdh8/pons-dds/commit/6acf889c3a4c5a966f88c95a0eca81387e26effc"
+        },
+        "date": 1780130783878,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "solve_deal",
+            "value": 81554788,
+            "range": "± 173033555",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/32",
+            "value": 2610336333,
+            "range": "± 18886544",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/200",
+            "value": 17940568083,
+            "range": "± 415863506",
             "unit": "ns/iter"
           }
         ]
