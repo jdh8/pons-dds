@@ -6,6 +6,8 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-05-31
+
 ### Added
 
 - `solve_deals_with_memory`: a parallel batch solve taking an explicit
