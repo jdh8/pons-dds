@@ -91,4 +91,4 @@ under Apache-2.0.
 
 ## License
 
-[Apache-2.0](LICENSE)
+[Apache-2.0](https://github.com/jdh8/pons-dds/blob/master/LICENSE)
