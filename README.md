@@ -21,12 +21,14 @@ use pons_dds::{solve_deal, solve_deals};
 
 // Solve one deal — fans the 5 strains across rayon workers.
 let deal: FullDeal = "N:AKQJT98765432... .AKQJT98765432.. \
-                      ..AKQJT98765432. ...AKQJT98765432".parse()?;
+                      ..AKQJT98765432. ...AKQJT98765432".parse().unwrap();
 let table = solve_deal(deal);
 assert_eq!(table.get(Strain::Spades, Seat::North), 13);
 
 // Solve many deals in parallel — preferred for batch workloads.
+let deals = [deal, deal];
 let tables = solve_deals(&deals);
+assert_eq!(tables.len(), 2);
 ```
 
 For sequential or diagnostic use, drive `Solver` directly:
@@ -34,10 +36,21 @@ For sequential or diagnostic use, drive `Solver` directly:
 ```rust
 use contract_bridge::Strain;
 use pons_dds::{Solver, solve_deal_on};
+# let deal: contract_bridge::FullDeal = "N:AKQJT98765432... .AKQJT98765432.. ..AKQJT98765432. ...AKQJT98765432".parse().unwrap();
 
 let mut solver = Solver::new(Strain::Notrump);
 let table = solve_deal_on(&mut solver, deal);
 ```
+
+## Scope
+
+This release ships the `Solver` API: a per-strain solver that produces one
+strain's row of a `TrickCountTable` for a `FullDeal`, plus the rayon-parallel
+`solve_deal` (single-deal) and `solve_deals` (batch) helpers that assemble the
+full 5 × 4 table, and the sequential single-thread `solve_deal_on` for
+deterministic profiling. The internal substrate (position state, move
+generator, search engine, transposition table, and friends) remains
+crate-private.
 
 ## Performance
 
@@ -63,7 +76,9 @@ pons-dds is a line-by-line pure-Rust port of the [DDS][dds] double dummy
 solver by Bo Haglund and Soren Hein — specifically the DDS 2.9.0 engine as
 carried by [Robert Salita's `ddss` fork][ddss-c], whose C++ sources are
 vendored under `ddss-sys/vendor/src/` and cited per-module throughout this
-crate's source. The alpha-beta search, transposition table, and move-ordering
+crate's source: each ported module names its corresponding vendor file in its
+docs, with `ddss-sys/vendor/src/ABsearch.cpp` the canonical reference for the
+search. The alpha-beta search, transposition table, and move-ordering
 heuristics all follow that reference; only the language and memory-safety
 scaffolding are new. The same C++ engine is reachable from Rust through the
 [`ddss`][ddss-rs] / [`ddss-sys`](https://crates.io/crates/ddss-sys) FFI crates,
