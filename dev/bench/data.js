@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1780167412156,
+  "lastUpdate": 1780167844474,
   "repoUrl": "https://github.com/jdh8/pons-dds",
   "entries": {
     "Benchmark": [
@@ -461,6 +461,48 @@ window.BENCHMARK_DATA = {
             "name": "solve_deals/200",
             "value": 23291317277,
             "range": "± 732796410",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "committer": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "distinct": true,
+          "id": "5f2a6f8b75473b804e9fae7d50602b3b8fcda18c",
+          "message": "Release 0.1.1\n\nBug-fix and additive release over 0.1.0.\n\n- Fix: parallel batch solving (solve_deals) could overflow Rayon's\n  default worker/calling-thread stacks on larger batches, and overflowed\n  readily on Windows' 1 MiB stacks. The deep search now runs only on the\n  solver pool's large-stack workers (regression test\n  solve_deals_safe_on_small_stack).\n- Add: solve_deals_with_memory for an explicit per-thread\n  transposition-table budget; examples/par_balance load-balance diagnostic.\n\nPublic API is additive only, so this is semver-compatible (0.1.0 -> 0.1.1).\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+          "timestamp": "2026-05-31T02:56:42+08:00",
+          "tree_id": "caee329e28ebf9ae64fa9eaf8cea94fdc7a7d155",
+          "url": "https://github.com/jdh8/pons-dds/commit/5f2a6f8b75473b804e9fae7d50602b3b8fcda18c"
+        },
+        "date": 1780167843994,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "solve_deal",
+            "value": 107562649,
+            "range": "± 208200402",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/32",
+            "value": 3812597733,
+            "range": "± 74191447",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/200",
+            "value": 26283217919,
+            "range": "± 875622584",
             "unit": "ns/iter"
           }
         ]
