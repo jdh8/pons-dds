@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1780095319025,
+  "lastUpdate": 1780125995387,
   "repoUrl": "https://github.com/jdh8/pons-dds",
   "entries": {
     "Benchmark": [
@@ -125,6 +125,48 @@ window.BENCHMARK_DATA = {
             "name": "solve_deals/200",
             "value": 22164916716,
             "range": "± 204350765",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "committer": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "distinct": true,
+          "id": "9baad84a304b28227c076f51815ca091452a8fcc",
+          "message": "Fix rustdoc private intra-doc links in public Solver/SearchStats docs",
+          "timestamp": "2026-05-30T15:20:10+08:00",
+          "tree_id": "055efb5031691b689687ea24ddf13ce75b3b6a76",
+          "url": "https://github.com/jdh8/pons-dds/commit/9baad84a304b28227c076f51815ca091452a8fcc"
+        },
+        "date": 1780125994991,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "solve_deal",
+            "value": 98434597,
+            "range": "± 223894209",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/32",
+            "value": 3286997383,
+            "range": "± 24112956",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/200",
+            "value": 22483072950,
+            "range": "± 203979046",
             "unit": "ns/iter"
           }
         ]
