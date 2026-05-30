@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1780131836569,
+  "lastUpdate": 1780139663373,
   "repoUrl": "https://github.com/jdh8/pons-dds",
   "entries": {
     "Benchmark": [
@@ -377,6 +377,48 @@ window.BENCHMARK_DATA = {
             "name": "solve_deals/200",
             "value": 17823525069,
             "range": "± 66831310",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "noreply@anthropic.com",
+            "name": "Claude",
+            "username": "claude"
+          },
+          "committer": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "distinct": true,
+          "id": "c290b7e23604fe2ac435bd8658631b881a82ce71",
+          "message": "Fix LICENSE link branch: master -> main\n\nThe default branch was renamed to main.",
+          "timestamp": "2026-05-30T19:08:08+08:00",
+          "tree_id": "4593dee7342e763510930645621bba754beb32f2",
+          "url": "https://github.com/jdh8/pons-dds/commit/c290b7e23604fe2ac435bd8658631b881a82ce71"
+        },
+        "date": 1780139662504,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "solve_deal",
+            "value": 95853678,
+            "range": "± 205582242",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/32",
+            "value": 3261516517,
+            "range": "± 40368875",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/200",
+            "value": 22009940771,
+            "range": "± 362999408",
             "unit": "ns/iter"
           }
         ]
