@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1780271585308,
+  "lastUpdate": 1783257139703,
   "repoUrl": "https://github.com/jdh8/pons-dds",
   "entries": {
     "Benchmark": [
@@ -545,6 +545,48 @@ window.BENCHMARK_DATA = {
             "name": "solve_deals/200",
             "value": 20629846346,
             "range": "± 526568146",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "committer": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "distinct": true,
+          "id": "f9072fde5400ebc17c9fd10a42faa95e7b0ec8a4",
+          "message": "Release 0.1.2\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>",
+          "timestamp": "2026-07-05T21:05:30+08:00",
+          "tree_id": "6bdc2fd7eef06408db9f97b5c6367e94197a3688",
+          "url": "https://github.com/jdh8/pons-dds/commit/f9072fde5400ebc17c9fd10a42faa95e7b0ec8a4"
+        },
+        "date": 1783257138994,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "solve_deal",
+            "value": 94562058,
+            "range": "± 192980347",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/32",
+            "value": 3395301805,
+            "range": "± 64885198",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/200",
+            "value": 24041080515,
+            "range": "± 728278829",
             "unit": "ns/iter"
           }
         ]
