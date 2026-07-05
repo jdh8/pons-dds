@@ -1179,18 +1179,19 @@ impl Engine {
         // `lowerbound <= true count <= upperbound` and only exits when
         // the two meet.
         let mut guess = hint.clamp(0, upperbound);
-        #[cfg(not(target_arch = "wasm32"))]
+        // `Instant::now` panics on wasm32-unknown-unknown (no clock), so
+        // the per-probe timing diagnostics are additionally gated off
+        // wasm; without the `profiling` feature they compile to nothing
+        // and `iter1_nanos`/`later_nanos` simply stay 0.
+        #[cfg(all(feature = "profiling", not(target_arch = "wasm32")))]
         let mut iter_idx = 0u32;
         loop {
             self.bisection_iters += 1;
             self.reset_best_moves();
-            // `Instant::now` panics on wasm32-unknown-unknown (no clock), so
-            // the per-iteration timing diagnostics are native-only; on wasm
-            // `iter1_nanos`/`later_nanos` simply stay 0.
-            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(all(feature = "profiling", not(target_arch = "wasm32")))]
             let t0 = std::time::Instant::now();
             let val = self.ab_search_0(pos, tt, guess, ini_depth);
-            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(all(feature = "profiling", not(target_arch = "wasm32")))]
             {
                 iter_idx += 1;
                 let dt = t0.elapsed().as_nanos();

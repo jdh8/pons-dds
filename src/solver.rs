@@ -259,9 +259,10 @@ impl Solver {
     }
 
     /// Cumulative `(iter1_nanos, later_nanos)` — wall-clock time spent
-    /// in the first bisection iteration of each `search_target` call vs
-    /// in subsequent iterations. The ratio answers whether TT-cached
-    /// internal subtrees make later iters cheap.
+    /// in the first target probe of each `search_target` call vs in
+    /// subsequent probes. The ratio answers whether TT-cached internal
+    /// subtrees make later probes cheap. Both stay 0 unless the crate
+    /// is built with `--features profiling`.
     #[inline]
     #[must_use]
     pub const fn bisection_timing(&self) -> (u128, u128) {

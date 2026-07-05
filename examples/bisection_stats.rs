@@ -8,6 +8,8 @@
 //! each time, it approaches `log2(13) + 1 ≈ 4`.
 //!
 //! Run with `cargo run --release --example bisection_stats -- [N]`.
+//! The per-probe timing split (iter 1 vs 2..N) needs
+//! `--features profiling`; without it those lines read zero.
 
 use contract_bridge::Strain;
 use contract_bridge::deck::full_deal;
@@ -67,6 +69,10 @@ fn main() {
     println!("bisection iterations:   {iters}");
     println!("avg iters per call:     {avg:.3}");
     println!();
+    if iter1_ns + later_ns == 0 {
+        println!("(probe timing split needs --features profiling)");
+        return;
+    }
     println!(
         "iter 1 total:           {iter1_ns} ns ({:.1}%)",
         iter1_share * 100.0
