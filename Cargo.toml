@@ -30,10 +30,18 @@ thiserror = "2"
 [dev-dependencies]
 contract-bridge = { version = "0.1", features = ["rand"] }
 criterion = { version = "0.8", features = ["html_reports"] }
+# FFI-backed DDS 2.9 reference engine, used as the oracle for the
+# `compare_ddss` cross-check test and head-to-head bench. pons-dds is pure
+# Rust, so it links cleanly alongside ddss-sys's C++ (unlike dds-bridge-sys).
+ddss = "0.1"
 rand = "0.10"
 
 [[bench]]
 name = "solver"
+harness = false
+
+[[bench]]
+name = "compare_ddss"
 harness = false
 
 [profile.release]
