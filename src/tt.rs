@@ -213,61 +213,70 @@ impl BlockId {
 /// `TT_LOWEST_RANK[aggr]` — relative rank of the lowest card present
 /// in `aggr`, where 14 is the lowest singleton bit. Empty suit is 15.
 /// Different from the absolute lowest rank in `lookup::LOWEST_RANK`.
-static TT_LOWEST_RANK: std::sync::LazyLock<Box<[i32; 8192]>> = std::sync::LazyLock::new(|| {
-    let mut t = Box::new([0i32; 8192]);
+/// Built at compile time so the hot-path read is a direct static load.
+static TT_LOWEST_RANK: [i32; 8192] = build_tt_lowest_rank();
+
+const fn build_tt_lowest_rank() -> [i32; 8192] {
+    let mut t = [0i32; 8192];
     t[0] = 15;
     let mut top_bit_rank: usize = 1;
-    for ind in 1..8192 {
+    let mut ind = 1usize;
+    while ind < 8192 {
         if ind >= (top_bit_rank << 1) {
             top_bit_rank <<= 1;
         }
         t[ind] = t[ind ^ top_bit_rank] - 1;
+        ind += 1;
     }
     t
-});
+}
 
 /// `MASK_BYTES[aggr][suit][b]` — precomputed mask bits for a 13-bit
 /// `aggr`, sliced into the same 4-level layout as `aggr_bytes`.
 ///
 /// Each suit needs 8 bits in one of 4 byte positions of a 32-bit
 /// integer; this table pre-shifts the "all live" mask for each cell.
-static MASK_BYTES: std::sync::LazyLock<Box<[[[u32; TT_BYTES]; TT_SUITS]; 8192]>> =
-    std::sync::LazyLock::new(|| {
-        let mut t = Box::new([[[0u32; TT_BYTES]; TT_SUITS]; 8192]);
-        let mut win_mask = vec![0u32; 8192];
-        let mut top_bit_rank: usize = 1;
+/// Built at compile time so the hot-path read is a direct static load.
+static MASK_BYTES: [[[u32; TT_BYTES]; TT_SUITS]; 8192] = build_mask_bytes();
 
-        for ind in 1..8192 {
-            if ind >= (top_bit_rank << 1) {
-                top_bit_rank <<= 1;
-            }
-            // winMask grows by 2 bits per set rank — always 2*k ones
-            // followed by zeros.
-            win_mask[ind] = (win_mask[ind ^ top_bit_rank] >> 2) | (3 << 24);
+const fn build_mask_bytes() -> [[[u32; TT_BYTES]; TT_SUITS]; 8192] {
+    let mut t = [[[0u32; TT_BYTES]; TT_SUITS]; 8192];
+    let mut win_mask = [0u32; 8192];
+    let mut top_bit_rank: usize = 1;
 
-            let w = win_mask[ind];
-            t[ind][0][0] = (w << 6) & 0xff00_0000;
-            t[ind][0][1] = (w << 14) & 0xff00_0000;
-            t[ind][0][2] = (w << 22) & 0xff00_0000;
-            t[ind][0][3] = (w << 30) & 0xff00_0000;
-
-            t[ind][1][0] = (w >> 2) & 0x00ff_0000;
-            t[ind][1][1] = (w << 6) & 0x00ff_0000;
-            t[ind][1][2] = (w << 14) & 0x00ff_0000;
-            t[ind][1][3] = (w << 22) & 0x00ff_0000;
-
-            t[ind][2][0] = (w >> 10) & 0x0000_ff00;
-            t[ind][2][1] = (w >> 2) & 0x0000_ff00;
-            t[ind][2][2] = (w << 6) & 0x0000_ff00;
-            t[ind][2][3] = (w << 14) & 0x0000_ff00;
-
-            t[ind][3][0] = (w >> 18) & 0x0000_00ff;
-            t[ind][3][1] = (w >> 10) & 0x0000_00ff;
-            t[ind][3][2] = (w >> 2) & 0x0000_00ff;
-            t[ind][3][3] = (w << 6) & 0x0000_00ff;
+    let mut ind = 1usize;
+    while ind < 8192 {
+        if ind >= (top_bit_rank << 1) {
+            top_bit_rank <<= 1;
         }
-        t
-    });
+        // winMask grows by 2 bits per set rank — always 2*k ones
+        // followed by zeros.
+        win_mask[ind] = (win_mask[ind ^ top_bit_rank] >> 2) | (3 << 24);
+
+        let w = win_mask[ind];
+        t[ind][0][0] = (w << 6) & 0xff00_0000;
+        t[ind][0][1] = (w << 14) & 0xff00_0000;
+        t[ind][0][2] = (w << 22) & 0xff00_0000;
+        t[ind][0][3] = (w << 30) & 0xff00_0000;
+
+        t[ind][1][0] = (w >> 2) & 0x00ff_0000;
+        t[ind][1][1] = (w << 6) & 0x00ff_0000;
+        t[ind][1][2] = (w << 14) & 0x00ff_0000;
+        t[ind][1][3] = (w << 22) & 0x00ff_0000;
+
+        t[ind][2][0] = (w >> 10) & 0x0000_ff00;
+        t[ind][2][1] = (w >> 2) & 0x0000_ff00;
+        t[ind][2][2] = (w << 6) & 0x0000_ff00;
+        t[ind][2][3] = (w << 14) & 0x0000_ff00;
+
+        t[ind][3][0] = (w >> 18) & 0x0000_00ff;
+        t[ind][3][1] = (w >> 10) & 0x0000_00ff;
+        t[ind][3][2] = (w >> 2) & 0x0000_00ff;
+        t[ind][3][3] = (w << 6) & 0x0000_00ff;
+        ind += 1;
+    }
+    t
+}
 
 // ---------- The transposition table ---------------------------------
 

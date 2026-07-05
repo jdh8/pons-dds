@@ -1,10 +1,11 @@
 //! Precomputed lookup tables used throughout the search.
 //!
 //! Ported from the vendor's `Init.cpp::InitConstants()`. The five
-//! 8192-entry arrays consume ~440 KB; they're computed once on first
-//! access via [`std::sync::LazyLock`] and read-only thereafter.
-
-use std::sync::LazyLock;
+//! 8192-entry arrays consume ~800 KB of `.rodata`; they're built at
+//! compile time by `const fn`s, so a hot-path read is a direct load
+//! from a static — no lazy-init check, no pointer indirection (the
+//! C++ reads plain globals; `LazyLock` here cost an atomic check per
+//! access).
 
 // ---- Hand-rotation constants ---------------------------------------
 //
@@ -40,87 +41,111 @@ pub const BIT_MAP_RANK: [u16; 16] = [
 
 /// `HIGHEST_RANK[aggr]` is the absolute rank (2..=14) of the highest
 /// bit set in `aggr`, or 0 if `aggr == 0`.
-pub static HIGHEST_RANK: LazyLock<[u8; 8192]> = LazyLock::new(|| {
+pub static HIGHEST_RANK: [u8; 8192] = build_highest_rank();
+
+const fn build_highest_rank() -> [u8; 8192] {
     let mut t = [0u8; 8192];
-    for (aggr, entry) in t.iter_mut().enumerate().skip(1) {
-        for r in (2..=14).rev() {
+    let mut aggr = 1usize;
+    while aggr < 8192 {
+        let mut r = 14usize;
+        while r >= 2 {
             if (aggr as u16) & BIT_MAP_RANK[r] != 0 {
-                *entry = r as u8;
+                t[aggr] = r as u8;
                 break;
             }
+            r -= 1;
         }
+        aggr += 1;
     }
     t
-});
+}
 
 /// `LOWEST_RANK[aggr]` — symmetric to `HIGHEST_RANK`, finding the
 /// lowest bit set.
-pub static LOWEST_RANK: LazyLock<[u8; 8192]> = LazyLock::new(|| {
+pub static LOWEST_RANK: [u8; 8192] = build_lowest_rank();
+
+const fn build_lowest_rank() -> [u8; 8192] {
     let mut t = [0u8; 8192];
-    for (aggr, entry) in t.iter_mut().enumerate().skip(1) {
-        for (r, &bit) in BIT_MAP_RANK.iter().enumerate().skip(2).take(13) {
-            if (aggr as u16) & bit != 0 {
-                *entry = r as u8;
+    let mut aggr = 1usize;
+    while aggr < 8192 {
+        let mut r = 2usize;
+        while r <= 14 {
+            if (aggr as u16) & BIT_MAP_RANK[r] != 0 {
+                t[aggr] = r as u8;
                 break;
             }
+            r += 1;
         }
+        aggr += 1;
     }
     t
-});
+}
 
 /// `COUNT_TABLE[aggr]` is `popcount(aggr)` for the low 13 bits.
 /// Could be replaced with `aggr.count_ones()` at call sites; kept as a
 /// table here for porting fidelity (the vendor reads this in a hot
 /// loop and the table form preserves identical access patterns).
-pub static COUNT_TABLE: LazyLock<[u8; 8192]> = LazyLock::new(|| {
+pub static COUNT_TABLE: [u8; 8192] = build_count_table();
+
+const fn build_count_table() -> [u8; 8192] {
     let mut t = [0u8; 8192];
-    for (aggr, entry) in t.iter_mut().enumerate() {
-        *entry = (aggr as u32).count_ones() as u8;
+    let mut aggr = 0usize;
+    while aggr < 8192 {
+        t[aggr] = (aggr as u32).count_ones() as u8;
+        aggr += 1;
     }
     t
-});
+}
 
 /// `REL_RANK[aggr][abs_rank]` is the relative rank (1..=13) of
 /// `abs_rank` (2..=14) in the suit represented by `aggr`. 1 is the
 /// highest card present, 2 the second-highest, etc. Zero if the bit
 /// for that absolute rank isn't set in `aggr`.
-pub static REL_RANK: LazyLock<[[i8; 15]; 8192]> = LazyLock::new(|| {
+pub static REL_RANK: [[i8; 15]; 8192] = build_rel_rank();
+
+const fn build_rel_rank() -> [[i8; 15]; 8192] {
     let mut t = [[0i8; 15]; 8192];
-    for (aggr, row) in t.iter_mut().enumerate().skip(1) {
+    let mut aggr = 1usize;
+    while aggr < 8192 {
         let mut ord: i8 = 0;
-        for r in (2..=14).rev() {
+        let mut r = 14usize;
+        while r >= 2 {
             if (aggr as u16) & BIT_MAP_RANK[r] != 0 {
                 ord += 1;
-                row[r] = ord;
+                t[aggr][r] = ord;
             }
+            r -= 1;
         }
+        aggr += 1;
     }
     t
-});
+}
 
 /// `WIN_RANKS[aggr][least_win]` is the suit bitmap of the `least_win`
-/// highest cards present in `aggr`. `least_win == 0` is always zero.
-pub static WIN_RANKS: LazyLock<[[u16; 14]; 8192]> = LazyLock::new(|| {
+/// highest cards present in `aggr`. `least_win == 0` is always zero;
+/// asking for more cards than are present saturates to all of `aggr`.
+pub static WIN_RANKS: [[u16; 14]; 8192] = build_win_ranks();
+
+const fn build_win_ranks() -> [[u16; 14]; 8192] {
+    // Strip-top-bit recurrence: the top `lw` cards of `aggr` are its
+    // top bit plus the top `lw - 1` cards of the rest.
     let mut t = [[0u16; 14]; 8192];
-    for (aggr, row) in t.iter_mut().enumerate() {
-        for (least_win, slot) in row.iter_mut().enumerate().skip(1) {
-            let mut res: u16 = 0;
-            let mut next_bit_no = 1;
-            for r in (2..=14).rev() {
-                if (aggr as u16) & BIT_MAP_RANK[r] != 0 {
-                    if next_bit_no <= least_win {
-                        res |= BIT_MAP_RANK[r];
-                        next_bit_no += 1;
-                    } else {
-                        break;
-                    }
-                }
-            }
-            *slot = res;
+    let mut top_bit: u16 = 1;
+    let mut aggr = 1usize;
+    while aggr < 8192 {
+        if aggr >= (top_bit << 1) as usize {
+            top_bit <<= 1;
         }
+        let rest = aggr ^ top_bit as usize;
+        let mut lw = 1usize;
+        while lw < 14 {
+            t[aggr][lw] = top_bit | t[rest][lw - 1];
+            lw += 1;
+        }
+        aggr += 1;
     }
     t
-});
+}
 
 // ---- Move-group table ---------------------------------------------
 //
@@ -159,7 +184,9 @@ impl MoveGroup {
 }
 
 /// `GROUP_DATA[ris]` decomposes the suit bitmap `ris` into groups.
-pub static GROUP_DATA: LazyLock<Box<[MoveGroup; 8192]>> = LazyLock::new(|| {
+pub static GROUP_DATA: [MoveGroup; 8192] = build_group_data();
+
+const fn build_group_data() -> [MoveGroup; 8192] {
     // Topside[r] = bits for ranks strictly above r (in the 13-bit
     // rank-2..14 space). Botside[r] = bits strictly below.
     const TOPSIDE: [u16; 15] = [
@@ -171,8 +198,7 @@ pub static GROUP_DATA: LazyLock<Box<[MoveGroup; 8192]>> = LazyLock::new(|| {
         0x1c00, 0x1800, 0x1000, 0x0000,
     ];
 
-    // Box-allocate the table so it doesn't blow the stack during init.
-    let mut t = Box::new([MoveGroup::empty(); 8192]);
+    let mut t = [MoveGroup::empty(); 8192];
     // Seed the singleton-bit case.
     t[1].last_group = 0;
     t[1].rank[0] = 2;
@@ -184,8 +210,9 @@ pub static GROUP_DATA: LazyLock<Box<[MoveGroup; 8192]>> = LazyLock::new(|| {
     let mut next_bit_rank: u16 = 0;
     let mut top_bit_no: usize = 2;
 
-    for ris in 2..8192 {
-        if (ris as u16) >= (top_bit_rank << 1) {
+    let mut ris = 2usize;
+    while ris < 8192 {
+        if ris as u16 >= (top_bit_rank << 1) {
             next_bit_rank = top_bit_rank;
             top_bit_rank <<= 1;
             top_bit_no += 1;
@@ -193,8 +220,7 @@ pub static GROUP_DATA: LazyLock<Box<[MoveGroup; 8192]>> = LazyLock::new(|| {
 
         // Start with the decomposition of (ris ^ top_bit_rank), then
         // either extend the last group or start a new one.
-        let prev = t[ris ^ top_bit_rank as usize];
-        t[ris] = prev;
+        t[ris] = t[ris ^ top_bit_rank as usize];
 
         if (ris as u16) & next_bit_rank != 0 {
             // Extend the existing topmost group.
@@ -215,10 +241,11 @@ pub static GROUP_DATA: LazyLock<Box<[MoveGroup; 8192]>> = LazyLock::new(|| {
             let prev_rank = if g == 0 { 0 } else { t[ris].rank[g - 1] };
             t[ris].gap[g] = TOPSIDE[top_bit_no] & BOTSIDE[prev_rank as usize];
         }
+        ris += 1;
     }
 
     t
-});
+}
 
 #[cfg(test)]
 mod tests {
