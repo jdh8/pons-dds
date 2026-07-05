@@ -205,6 +205,70 @@ pub struct Engine {
     pub stats: SearchStats,
 }
 
+/// Compute the vendor's `handLookup`: for each `(suit, rank)`, the hand
+/// that holds the card (0 if nobody does). Depends only on the deal.
+pub fn hand_lookup_of(rank_in_suit: &[[u16; 4]; 4]) -> [[i32; 15]; DDS_SUITS] {
+    let mut hand_lookup = [[0i32; 15]; DDS_SUITS];
+    for (s, suit_lookup) in hand_lookup.iter_mut().enumerate() {
+        for r in (2..=14).rev() {
+            suit_lookup[r] = 0;
+            for (h, hand_ranks) in rank_in_suit.iter().enumerate() {
+                if hand_ranks[s] & BIT_MAP_RANK[r] != 0 {
+                    suit_lookup[r] = h as i32;
+                    break;
+                }
+            }
+        }
+    }
+    hand_lookup
+}
+
+/// Build the 8192-entry `rel` table from a `hand_lookup`: for every
+/// 13-bit live-card set, the (rank, holder) of its k-th highest card
+/// per suit. Mirrors the rel loop of the vendor's `SetDealTables`.
+pub fn build_rel(hand_lookup: &[[i32; 15]; DDS_SUITS], rel: &mut [RelRanks; 8192]) {
+    // rel[0]: every rank has (hand=-1, rank=0). Default is hand=0,
+    // rank=0 — fix the hand field.
+    for ord in 1..=13usize {
+        for s in 0..DDS_SUITS {
+            rel[0].abs_rank[ord][s].hand = -1;
+            rel[0].abs_rank[ord][s].rank = 0;
+        }
+    }
+
+    let mut top_bit_rank: u32 = 1;
+    let mut top_bit_no: usize = 2;
+    for aggr in 1usize..8192 {
+        if aggr >= (top_bit_rank << 1) as usize {
+            top_bit_rank <<= 1;
+            top_bit_no += 1;
+        }
+        rel[aggr] = rel[aggr ^ top_bit_rank as usize];
+
+        let weight = aggr.count_ones() as usize;
+        for c in (2..=weight).rev() {
+            for s in 0..DDS_SUITS {
+                rel[aggr].abs_rank[c][s] = rel[aggr].abs_rank[c - 1][s];
+            }
+        }
+        for (s, suit_lookup) in hand_lookup.iter().enumerate() {
+            rel[aggr].abs_rank[1][s].hand = suit_lookup[top_bit_no];
+            rel[aggr].abs_rank[1][s].rank = top_bit_no as i32;
+        }
+    }
+}
+
+/// Test helper: a freshly built boxed `rel` table for a fixture deal.
+#[cfg(test)]
+pub fn build_rel_for(rank_in_suit: &[[u16; 4]; 4]) -> Box<[RelRanks; 8192]> {
+    let mut rel: Box<[RelRanks; 8192]> = vec![RelRanks::default(); 8192]
+        .into_boxed_slice()
+        .try_into()
+        .unwrap_or_else(|_| unreachable!());
+    build_rel(&hand_lookup_of(rank_in_suit), &mut rel);
+    rel
+}
+
 impl Engine {
     /// Create a fresh engine for the given strain. Use
     /// [`Engine::set_deal`] to compute the `rel` table for a specific
@@ -278,54 +342,9 @@ impl Engine {
     /// Mirrors the vendor's `SetDealTables`; the per-`Pos` counterpart
     /// is [`Engine::init_pos`].
     pub(crate) fn set_deal_tables(&mut self, pos: &Pos, tt: &mut TransTable) {
-        // --- handLookup: topmost holder of each (suit, rank) ---
-        let mut hand_lookup = [[0i32; 15]; DDS_SUITS];
-        for (s, suit_lookup) in hand_lookup.iter_mut().enumerate() {
-            for r in (2..=14).rev() {
-                suit_lookup[r] = 0;
-                for h in 0..DDS_HANDS {
-                    if pos.rank_in_suit[h][s] & BIT_MAP_RANK[r] != 0 {
-                        suit_lookup[r] = h as i32;
-                        break;
-                    }
-                }
-            }
-        }
-
+        let hand_lookup = hand_lookup_of(&pos.rank_in_suit);
         tt.init(&hand_lookup);
-
-        // rel[0]: every rank has (hand=-1, rank=0). Default is hand=0,
-        // rank=0 — fix the hand field.
-        for ord in 1..=13usize {
-            for s in 0..DDS_SUITS {
-                self.rel[0].abs_rank[ord][s].hand = -1;
-                self.rel[0].abs_rank[ord][s].rank = 0;
-            }
-        }
-
-        let mut top_bit_rank: u32 = 1;
-        let mut top_bit_no: usize = 2;
-        for aggr in 1u32..8192 {
-            if aggr >= (top_bit_rank << 1) {
-                top_bit_rank <<= 1;
-                top_bit_no += 1;
-            }
-            self.rel[aggr as usize] = self.rel[(aggr ^ top_bit_rank) as usize];
-
-            let weight = aggr.count_ones() as usize;
-            for c in (2..=weight).rev() {
-                for s in 0..DDS_SUITS {
-                    let prev_hand = self.rel[aggr as usize].abs_rank[c - 1][s].hand;
-                    let prev_rank = self.rel[aggr as usize].abs_rank[c - 1][s].rank;
-                    self.rel[aggr as usize].abs_rank[c][s].hand = prev_hand;
-                    self.rel[aggr as usize].abs_rank[c][s].rank = prev_rank;
-                }
-            }
-            for (s, suit_lookup) in hand_lookup.iter().enumerate() {
-                self.rel[aggr as usize].abs_rank[1][s].hand = suit_lookup[top_bit_no];
-                self.rel[aggr as usize].abs_rank[1][s].rank = top_bit_no as i32;
-            }
-        }
+        build_rel(&hand_lookup, &mut self.rel);
     }
 
     /// Initialize the per-`Pos` derived fields (`aggr`, `length`,
@@ -682,6 +701,7 @@ impl Engine {
             trump,
             &mut res,
             &self.node_type_store,
+            self.rel.as_ref(),
         );
         let hand_u = hand as usize;
 
@@ -690,7 +710,15 @@ impl Engine {
                 stat!(self.stats.exit_quick += 1;);
                 return qtricks != 0;
             }
-            if !later_tricks_min(pos, hand, depth, target, trump, &self.node_type_store) {
+            if !later_tricks_min(
+                pos,
+                hand,
+                depth,
+                target,
+                trump,
+                &self.node_type_store,
+                self.rel.as_ref(),
+            ) {
                 stat!(self.stats.exit_later += 1;);
                 return false;
             }
@@ -699,7 +727,15 @@ impl Engine {
                 stat!(self.stats.exit_quick += 1;);
                 return qtricks == 0;
             }
-            if later_tricks_max(pos, hand, depth, target, trump, &self.node_type_store) {
+            if later_tricks_max(
+                pos,
+                hand,
+                depth,
+                target,
+                trump,
+                &self.node_type_store,
+                self.rel.as_ref(),
+            ) {
                 stat!(self.stats.exit_later += 1;);
                 return true;
             }

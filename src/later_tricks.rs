@@ -18,6 +18,7 @@
 //! is one of the most position-sensitive heuristics in the solver.
 
 use crate::lookup::{BIT_MAP_RANK, LHO, PARTNER, RHO};
+use crate::moves::RelRanks;
 use crate::pos::Pos;
 use crate::quick_tricks::{DDS_NOTRUMP, MAXNODE, MINNODE};
 
@@ -25,25 +26,13 @@ const DDS_SUITS: usize = 4;
 const DDS_HANDS: usize = 4;
 
 /// Find the (rank, hand) of the `k`-th highest card in `aggr` for
-/// `suit`. Mirrors the vendor's `thrd.rel[aggr].absRank[k][suit]` table
-/// lookup. `k` is 1-based. Returns `(0, -1)` if there's no such card.
-fn abs_rank(rank_in_suit: &[[u16; 4]; 4], aggr: u16, k: usize, suit: usize) -> (i32, i32) {
-    let mut count = 0usize;
-    for r in (2i32..=14).rev() {
-        let bit = BIT_MAP_RANK[r as usize];
-        if aggr & bit != 0 {
-            count += 1;
-            if count == k {
-                for (h, hand_ranks) in rank_in_suit.iter().enumerate() {
-                    if hand_ranks[suit] & bit != 0 {
-                        return (r, h as i32);
-                    }
-                }
-                return (r, -1);
-            }
-        }
-    }
-    (0, -1)
+/// `suit` — the vendor's `thrd.rel[aggr].absRank[k][suit]`, one load
+/// into the per-deal table. `k` is 1-based. Returns `(0, -1)` if
+/// there's no such card.
+#[inline]
+fn abs_rank(rel: &[RelRanks], aggr: u16, k: usize, suit: usize) -> (i32, i32) {
+    let entry = rel[aggr as usize].abs_rank[k][suit];
+    (entry.rank, entry.hand)
 }
 
 /// MIN-side end-game pruning. Mirrors the vendor's `LaterTricksMIN`.
@@ -59,6 +48,7 @@ pub fn later_tricks_min(
     target: i32,
     trump: i32,
     node_type_store: &[i32; DDS_HANDS],
+    rel: &[RelRanks],
 ) -> bool {
     let hand_u = hand as usize;
     let depth_u = depth as usize;
@@ -160,7 +150,7 @@ pub fn later_tricks_min(
             }
         } else {
             let aggr = tpos.aggr[trump as usize];
-            let (third_rank, h) = abs_rank(&tpos.rank_in_suit, aggr, 3, trump as usize);
+            let (third_rank, h) = abs_rank(rel, aggr, 3, trump as usize);
             if h == -1 {
                 return true;
             }
@@ -190,6 +180,7 @@ pub fn later_tricks_max(
     target: i32,
     trump: i32,
     node_type_store: &[i32; DDS_HANDS],
+    rel: &[RelRanks],
 ) -> bool {
     let hand_u = hand as usize;
     let depth_u = depth as usize;
@@ -291,7 +282,7 @@ pub fn later_tricks_max(
             }
         } else {
             let aggr = tpos.aggr[trump as usize];
-            let (third_rank, h) = abs_rank(&tpos.rank_in_suit, aggr, 3, trump as usize);
+            let (third_rank, h) = abs_rank(rel, aggr, 3, trump as usize);
             if h == -1 {
                 return false;
             }
@@ -324,24 +315,25 @@ pub fn later_tricks(
     target: i32,
     trump: i32,
     node_type_store: &[i32; DDS_HANDS],
+    rel: &[RelRanks],
 ) -> Option<i32> {
     if node_type_store[hand as usize] == MAXNODE {
         // For MAX, LaterTricksMIN returning false indicates MIN cannot
         // prevent the target (a forced concede from MIN's side).
-        if !later_tricks_min(tpos, hand, depth, target, trump, node_type_store) {
+        if !later_tricks_min(tpos, hand, depth, target, trump, node_type_store, rel) {
             // The exact value isn't important here for v0.1 — the
             // vendor's caller treats this as "result determined" and
             // returns the success-flag accordingly.
             return Some(tpos.tricks_max);
         }
-        if later_tricks_max(tpos, hand, depth, target, trump, node_type_store) {
+        if later_tricks_max(tpos, hand, depth, target, trump, node_type_store, rel) {
             return Some(tpos.tricks_max);
         }
     } else {
-        if later_tricks_max(tpos, hand, depth, target, trump, node_type_store) {
+        if later_tricks_max(tpos, hand, depth, target, trump, node_type_store, rel) {
             return Some(tpos.tricks_max);
         }
-        if !later_tricks_min(tpos, hand, depth, target, trump, node_type_store) {
+        if !later_tricks_min(tpos, hand, depth, target, trump, node_type_store, rel) {
             return Some(tpos.tricks_max);
         }
     }
@@ -368,6 +360,7 @@ mod tests {
             pos.second_best[s] = HighCard { rank: 0, hand: -1 };
         }
 
+        let rel = crate::search::build_rel_for(&pos.rank_in_suit);
         let result = later_tricks(
             &mut pos,
             0,
@@ -375,6 +368,7 @@ mod tests {
             13,
             DDS_NOTRUMP, // NT, no trump winner
             &NODE_TYPE,
+            rel.as_ref(),
         );
 
         assert_eq!(result, None, "no winners → search must continue");
@@ -410,7 +404,8 @@ mod tests {
         pos.tricks_max = 12;
 
         // hand = 0 (MAX side), depth = 4 so depth>>2 = 1.
-        let result = later_tricks(&mut pos, 0, 4, 13, DDS_NOTRUMP, &NODE_TYPE);
+        let rel = crate::search::build_rel_for(&pos.rank_in_suit);
+        let result = later_tricks(&mut pos, 0, 4, 13, DDS_NOTRUMP, &NODE_TYPE, rel.as_ref());
 
         assert!(
             result.is_some(),
@@ -441,7 +436,8 @@ mod tests {
         pos.tricks_max = 12;
 
         // Trump = 0 (not NT). Depth doesn't matter much; pick 0.
-        let result = later_tricks(&mut pos, 0, 0, 13, 0, &NODE_TYPE);
+        let rel = crate::search::build_rel_for(&pos.rank_in_suit);
+        let result = later_tricks(&mut pos, 0, 0, 13, 0, &NODE_TYPE, rel.as_ref());
 
         assert!(
             result.is_some(),

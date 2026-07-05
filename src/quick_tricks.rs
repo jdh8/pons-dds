@@ -16,6 +16,7 @@
 //! convention as the vendor source.
 
 use crate::lookup::{BIT_MAP_RANK, HIGHEST_RANK, LHO, PARTNER, RHO};
+use crate::moves::RelRanks;
 use crate::pos::Pos;
 
 /// MAXNODE constant from the vendor (`#define MAXNODE 1`).
@@ -35,29 +36,15 @@ const DDS_SUITS: usize = 4;
 const DDS_HANDS: usize = 4;
 
 /// Find the (rank, hand) of the `k`-th highest card present in `aggr`
-/// for `suit`, looking up the original holder via `rank_in_suit`.
+/// for `suit` — the vendor's `thrd.rel[aggr].absRank[k][suit]`, one
+/// load into the per-deal table.
 ///
-/// Replaces the vendor's `thrd.rel[aggr].absRank[k][suit]` lookup.
 /// Returns `(0, -1)` if no such card exists. `k` is 1-based: `k = 1` is
 /// the highest, `k = 2` the second-highest, etc.
 #[inline]
-fn abs_rank(rank_in_suit: &[[u16; 4]; 4], aggr: u16, k: usize, suit: usize) -> (i32, i32) {
-    let mut count = 0usize;
-    for r in (2i32..=14).rev() {
-        let bit = BIT_MAP_RANK[r as usize];
-        if aggr & bit != 0 {
-            count += 1;
-            if count == k {
-                for (h, ranks) in rank_in_suit.iter().enumerate() {
-                    if ranks[suit] & bit != 0 {
-                        return (r, h as i32);
-                    }
-                }
-                return (r, -1);
-            }
-        }
-    }
-    (0, -1)
+fn abs_rank(rel: &[RelRanks], aggr: u16, k: usize, suit: usize) -> (i32, i32) {
+    let entry = rel[aggr as usize].abs_rank[k][suit];
+    (entry.rank, entry.hand)
 }
 
 /// Sure-tricks heuristic. Mirror of the vendor's `QuickTricks`.
@@ -71,6 +58,7 @@ fn abs_rank(rank_in_suit: &[[u16; 4]; 4], aggr: u16, k: usize, suit: usize) -> (
 /// `h`; this is the per-deal MAX/MIN assignment from the vendor's
 /// `thrd.nodeTypeStore`.
 #[inline]
+#[allow(clippy::too_many_arguments)]
 pub fn quick_tricks(
     tpos: &mut Pos,
     hand: i32,
@@ -79,6 +67,7 @@ pub fn quick_tricks(
     trump: i32,
     result: &mut bool,
     node_type_store: &[i32; DDS_HANDS],
+    rel: &[RelRanks],
 ) -> i32 {
     let hand_u = hand as usize;
     let depth_u = depth as usize;
@@ -455,6 +444,7 @@ pub fn quick_tricks(
                             comm_rank,
                             &mut res,
                             hand,
+                            rel,
                         );
 
                         if res == 1 {
@@ -472,7 +462,7 @@ pub fn quick_tricks(
                     } else {
                         qtricks = quick_tricks_partner_hand_nt(
                             tpos, cutoff, depth, count_lho, count_rho, count_own, count_part, suit,
-                            qtricks, comm_suit, comm_rank, &mut res, hand,
+                            qtricks, comm_suit, comm_rank, &mut res, hand, rel,
                         );
 
                         if res == 1 {
@@ -843,6 +833,7 @@ fn quick_tricks_partner_hand_trump(
     comm_rank: i32,
     res: &mut i32,
     hand: i32,
+    rel: &[RelRanks],
 ) -> i32 {
     // res = 0: continue with same suit.
     // res = 1: cutoff.
@@ -919,12 +910,8 @@ fn quick_tricks_partner_hand_trump(
         && (count_lho >= 2 || lho_trump_ranks == 0)
         && (count_rho >= 2 || rho_trump_ranks == 0)
     {
-        let mut ranks: u16 = 0;
-        for h in 0..DDS_HANDS {
-            ranks |= tpos.rank_in_suit[h][suit_u];
-        }
-
-        let (third_rank, third_hand) = abs_rank(&tpos.rank_in_suit, ranks, 3, suit_u);
+        let ranks = tpos.aggr[suit_u];
+        let (third_rank, third_hand) = abs_rank(rel, ranks, 3, suit_u);
         if third_hand == PARTNER[hand_u] as i32 {
             tpos.win_ranks[depth_u][suit_u] |= BIT_MAP_RANK[third_rank as usize];
             tpos.win_ranks[depth_u][comm_suit as usize] |= BIT_MAP_RANK[comm_rank as usize];
@@ -965,6 +952,7 @@ fn quick_tricks_partner_hand_nt(
     comm_rank: i32,
     res: &mut i32,
     hand: i32,
+    rel: &[RelRanks],
 ) -> i32 {
     *res = 1;
     let suit_u = suit as usize;
@@ -1019,12 +1007,8 @@ fn quick_tricks_partner_hand_nt(
             return qt;
         }
     } else if suit == comm_suit && tpos.second_best[suit_u].hand == LHO[hand_u] as i32 {
-        let mut ranks: u16 = 0;
-        for h in 0..DDS_HANDS {
-            ranks |= tpos.rank_in_suit[h][suit_u];
-        }
-
-        let (third_rank, third_hand) = abs_rank(&tpos.rank_in_suit, ranks, 3, suit_u);
+        let ranks = tpos.aggr[suit_u];
+        let (third_rank, third_hand) = abs_rank(rel, ranks, 3, suit_u);
         if third_hand == PARTNER[hand_u] as i32 {
             tpos.win_ranks[depth_u][suit_u] |= BIT_MAP_RANK[third_rank as usize];
             qt += 1;
@@ -1211,6 +1195,7 @@ mod tests {
         // pick something below MAX_DEPTH and above 0 such that the
         // win_ranks slot exists.
         let mut success = false;
+        let rel = crate::search::build_rel_for(&pos.rank_in_suit);
         let qt = quick_tricks(
             &mut pos,
             0, // hand = North
@@ -1219,6 +1204,7 @@ mod tests {
             DDS_NOTRUMP,
             &mut success,
             &NODE_TYPE,
+            rel.as_ref(),
         );
 
         assert!(
@@ -1249,7 +1235,17 @@ mod tests {
         }
 
         let mut success = true; // start true to verify it gets cleared.
-        let qt = quick_tricks(&mut pos, 0, 0, 13, DDS_NOTRUMP, &mut success, &NODE_TYPE);
+        let rel = crate::search::build_rel_for(&pos.rank_in_suit);
+        let qt = quick_tricks(
+            &mut pos,
+            0,
+            0,
+            13,
+            DDS_NOTRUMP,
+            &mut success,
+            &NODE_TYPE,
+            rel.as_ref(),
+        );
 
         // We take the one easy trick but cannot reach target=13.
         assert_eq!(qt, 1, "single A → 1 quick trick");
@@ -1284,7 +1280,17 @@ mod tests {
         // North (hand 0) has nothing in any suit.
 
         let mut success = true;
-        let qt = quick_tricks(&mut pos, 0, 4, 1, DDS_NOTRUMP, &mut success, &NODE_TYPE);
+        let rel = crate::search::build_rel_for(&pos.rank_in_suit);
+        let qt = quick_tricks(
+            &mut pos,
+            0,
+            4,
+            1,
+            DDS_NOTRUMP,
+            &mut success,
+            &NODE_TYPE,
+            rel.as_ref(),
+        );
 
         assert_eq!(qt, 0, "no winners → 0 quick tricks");
         assert!(
