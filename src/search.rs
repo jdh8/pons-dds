@@ -415,7 +415,7 @@ impl Engine {
         pos.rank_in_suit[h][s] &= !BIT_MAP_RANK[r];
         pos.aggr[s] ^= BIT_MAP_RANK[r];
         pos.hand_dist[h] -= HAND_DELTA[s];
-        pos.length[h][s] = pos.length[h][s].saturating_sub(1);
+        pos.length[h][s] -= 1;
     }
 
     /// Apply hand 1's card. Mirrors vendor `Make1`.
@@ -432,7 +432,7 @@ impl Engine {
         pos.rank_in_suit[h][s] &= !BIT_MAP_RANK[r];
         pos.aggr[s] ^= BIT_MAP_RANK[r];
         pos.hand_dist[h] -= HAND_DELTA[s];
-        pos.length[h][s] = pos.length[h][s].saturating_sub(1);
+        pos.length[h][s] -= 1;
     }
 
     /// Apply hand 2's card. Mirrors vendor `Make2`.
@@ -449,7 +449,7 @@ impl Engine {
         pos.rank_in_suit[h][s] &= !BIT_MAP_RANK[r];
         pos.aggr[s] ^= BIT_MAP_RANK[r];
         pos.hand_dist[h] -= HAND_DELTA[s];
-        pos.length[h][s] = pos.length[h][s].saturating_sub(1);
+        pos.length[h][s] -= 1;
     }
 
     /// Apply hand 3's card, finishing the trick. Mirrors vendor
@@ -485,7 +485,7 @@ impl Engine {
         pos.rank_in_suit[h][s] &= !BIT_MAP_RANK[r];
         pos.aggr[s] ^= BIT_MAP_RANK[r];
         pos.hand_dist[h] -= HAND_DELTA[s];
-        pos.length[h][s] = pos.length[h][s].saturating_sub(1);
+        pos.length[h][s] -= 1;
 
         // Snapshot the winners that will change.
         let wp = &mut self.winners[trick];
@@ -523,7 +523,7 @@ impl Engine {
         pos.rank_in_suit[h][s] |= BIT_MAP_RANK[r];
         pos.aggr[s] |= BIT_MAP_RANK[r];
         pos.hand_dist[h] += HAND_DELTA[s];
-        pos.length[h][s] = pos.length[h][s].saturating_add(1);
+        pos.length[h][s] += 1;
 
         let wp = &self.winners[trick];
         for n in 0..(wp.number as usize) {
@@ -546,7 +546,7 @@ impl Engine {
         pos.rank_in_suit[h][s] |= BIT_MAP_RANK[r];
         pos.aggr[s] |= BIT_MAP_RANK[r];
         pos.hand_dist[h] += HAND_DELTA[s];
-        pos.length[h][s] = pos.length[h][s].saturating_add(1);
+        pos.length[h][s] += 1;
     }
 
     /// Undo a [`Engine::make1`]. Mirrors vendor `Undo2`.
@@ -560,7 +560,7 @@ impl Engine {
         pos.rank_in_suit[h][s] |= BIT_MAP_RANK[r];
         pos.aggr[s] |= BIT_MAP_RANK[r];
         pos.hand_dist[h] += HAND_DELTA[s];
-        pos.length[h][s] = pos.length[h][s].saturating_add(1);
+        pos.length[h][s] += 1;
     }
 
     /// Undo a [`Engine::make2`]. Mirrors vendor `Undo3`.
@@ -574,7 +574,7 @@ impl Engine {
         pos.rank_in_suit[h][s] |= BIT_MAP_RANK[r];
         pos.aggr[s] |= BIT_MAP_RANK[r];
         pos.hand_dist[h] += HAND_DELTA[s];
-        pos.length[h][s] = pos.length[h][s].saturating_add(1);
+        pos.length[h][s] += 1;
     }
 
     // ------------------------------------------------------------------
