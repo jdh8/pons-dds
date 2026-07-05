@@ -44,7 +44,7 @@ const DDS_HANDS: usize = 4;
 #[inline]
 fn abs_rank(rel: &[RelRanks], aggr: u16, k: usize, suit: usize) -> (i32, i32) {
     let entry = rel[aggr as usize].abs_rank[k][suit];
-    (entry.rank, entry.hand)
+    (i32::from(entry.rank), i32::from(entry.hand))
 }
 
 /// Sure-tricks heuristic. Mirror of the vendor's `QuickTricks`.

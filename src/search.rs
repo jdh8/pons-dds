@@ -252,8 +252,11 @@ pub fn build_rel(hand_lookup: &[[i32; 15]; DDS_SUITS], rel: &mut [RelRanks; 8192
             }
         }
         for (s, suit_lookup) in hand_lookup.iter().enumerate() {
-            rel[aggr].abs_rank[1][s].hand = suit_lookup[top_bit_no];
-            rel[aggr].abs_rank[1][s].rank = top_bit_no as i32;
+            #[allow(clippy::cast_possible_truncation)]
+            {
+                rel[aggr].abs_rank[1][s].hand = suit_lookup[top_bit_no] as i8;
+                rel[aggr].abs_rank[1][s].rank = top_bit_no as i8;
+            }
         }
     }
 }
@@ -375,12 +378,12 @@ impl Engine {
         for s in 0..DDS_SUITS {
             let a = pos.aggr[s] as usize;
             pos.winner[s] = HighCard {
-                rank: self.rel[a].abs_rank[1][s].rank,
-                hand: self.rel[a].abs_rank[1][s].hand,
+                rank: i32::from(self.rel[a].abs_rank[1][s].rank),
+                hand: i32::from(self.rel[a].abs_rank[1][s].hand),
             };
             pos.second_best[s] = HighCard {
-                rank: self.rel[a].abs_rank[2][s].rank,
-                hand: self.rel[a].abs_rank[2][s].hand,
+                rank: i32::from(self.rel[a].abs_rank[2][s].rank),
+                hand: i32::from(self.rel[a].abs_rank[2][s].hand),
             };
         }
     }
@@ -498,10 +501,10 @@ impl Engine {
                 wp.number += 1;
 
                 let aggr = pos.aggr[st] as usize;
-                pos.winner[st].rank = self.rel[aggr].abs_rank[1][st].rank;
-                pos.winner[st].hand = self.rel[aggr].abs_rank[1][st].hand;
-                pos.second_best[st].rank = self.rel[aggr].abs_rank[2][st].rank;
-                pos.second_best[st].hand = self.rel[aggr].abs_rank[2][st].hand;
+                pos.winner[st].rank = i32::from(self.rel[aggr].abs_rank[1][st].rank);
+                pos.winner[st].hand = i32::from(self.rel[aggr].abs_rank[1][st].hand);
+                pos.second_best[st].rank = i32::from(self.rel[aggr].abs_rank[2][st].rank);
+                pos.second_best[st].hand = i32::from(self.rel[aggr].abs_rank[2][st].hand);
             }
         }
     }

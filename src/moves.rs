@@ -42,10 +42,16 @@ const DDS_SUITS: usize = 4;
 // ---------------------------------------------------------------------
 
 /// Vendor's `absRankType`: which seat holds the rank at this offset.
+///
+/// Packed to the vendor's 2-byte layout (`char rank; signed char
+/// hand;`, dds.h) — the 8192-entry [`RelRanks`] table is randomly
+/// probed on the search's hot path, so its footprint (960 KiB at this
+/// size, 4x that with `i32` fields) decides whether it lives in cache.
+/// `rank` is 0..=14 and `hand` is -1..=3, so `i8` is lossless.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct AbsRank {
-    pub rank: i32,
-    pub hand: i32,
+    pub rank: i8,
+    pub hand: i8,
 }
 
 /// Vendor's `relRanksType`: for each (`rank_index`, suit) entry, the seat
@@ -59,6 +65,10 @@ pub struct AbsRank {
 pub struct RelRanks {
     pub abs_rank: [[AbsRank; DDS_SUITS]; 15],
 }
+
+/// The whole point of the `i8` packing: one entry per cache line pair,
+/// vendor parity (`relRanksType` is 120 bytes).
+const _: () = assert!(size_of::<RelRanks>() == 120);
 
 /// `trackType` from the vendor — per-trick scratchpad.
 #[derive(Clone, Copy, Debug)]
@@ -932,7 +942,7 @@ impl Moves {
         _lead: usize,
     ) -> i32 {
         if aggr < thrp_rel.len() {
-            thrp_rel[aggr].abs_rank[3][suit].hand
+            i32::from(thrp_rel[aggr].abs_rank[3][suit].hand)
         } else {
             0
         }
