@@ -1108,19 +1108,27 @@ impl Engine {
             return 0;
         }
 
+        #[cfg(not(target_arch = "wasm32"))]
         let mut iter_idx = 0u32;
         while lowerbound < upperbound {
             self.bisection_iters += 1;
-            iter_idx += 1;
             let target = (lowerbound + upperbound + 1) / 2;
             self.reset_best_moves();
+            // `Instant::now` panics on wasm32-unknown-unknown (no clock), so
+            // the per-iteration timing diagnostics are native-only; on wasm
+            // `iter1_nanos`/`later_nanos` simply stay 0.
+            #[cfg(not(target_arch = "wasm32"))]
             let t0 = std::time::Instant::now();
             let val = self.ab_search_0(pos, tt, target, ini_depth);
-            let dt = t0.elapsed().as_nanos();
-            if iter_idx == 1 {
-                self.iter1_nanos += dt;
-            } else {
-                self.later_nanos += dt;
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                iter_idx += 1;
+                let dt = t0.elapsed().as_nanos();
+                if iter_idx == 1 {
+                    self.iter1_nanos += dt;
+                } else {
+                    self.later_nanos += dt;
+                }
             }
             if val {
                 lowerbound = target;
