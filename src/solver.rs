@@ -214,7 +214,19 @@ impl Solver {
             pos.first[INI_DEPTH as usize] = leader as i32;
             self.engine.init_pos(&mut pos);
 
-            let tricks = self.engine.search_target(&mut pos, &mut self.tt, INI_DEPTH);
+            // Seed the target walk (vendor `CalcSingleCommon`): the
+            // partner of a solved declarer almost always scores the
+            // same, an opponent almost always scores the complement;
+            // the first declarer starts from the vendor's static guess.
+            let hint = match seat_idx {
+                0 => 7 - (leader as i32 & 1),
+                2 => i32::from(row[0]),
+                _ => 13 - i32::from(row[seat_idx - 1]),
+            };
+
+            let tricks = self
+                .engine
+                .search_target(&mut pos, &mut self.tt, INI_DEPTH, hint);
             debug_assert!((0..=13).contains(&tricks), "tricks out of range");
             row[seat_idx] = tricks as u8;
         }

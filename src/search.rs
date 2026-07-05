@@ -183,9 +183,11 @@ pub struct Engine {
     /// Diagnostic counters. Incremented only in the bisection driver
     /// ([`Engine::search_target`]), not in the inner alpha-beta recursion,
     /// so the cost is at most a handful of `+= 1` per `search_target` call.
-    /// Used to answer "how many alpha-beta probes does one bisection
-    /// actually need?" — i.e. whether the TT is carrying bounds between
-    /// successive target probes.
+    /// Used to answer "how many alpha-beta probes does one
+    /// `search_target` actually need?" — i.e. whether the hint walk and
+    /// the TT keep the probe count near the 2-probe ideal.
+    /// `bisection_iters` counts every probe of the stepping walk
+    /// (including the near-free `target == 0` ones).
     pub search_target_calls: u64,
     pub bisection_iters: u64,
 
@@ -1078,18 +1080,23 @@ impl Engine {
     // Bisection driver
     // ------------------------------------------------------------------
 
-    /// Drive the bisection loop to find the exact tricks MAX achieves
-    /// from the position. Mirrors the inner bisection of
-    /// `SolveSameBoard` in `SolverIF.cpp`.
+    /// Find the exact tricks MAX achieves from the position via a
+    /// hint-anchored stepping walk over the trick target. Mirrors the
+    /// guess loop of `SolveSameBoard` in `SolverIF.cpp`; `hint` seeds
+    /// the first probe (an exact hint — e.g. the partner seat's score —
+    /// resolves in two probes). Any hint yields the same result, only
+    /// the probe count varies.
     ///
     /// `pos.tricks_max` should be 0 at entry. The engine's `ini_depth`
     /// field is set to `ini_depth` before the loop runs; callers should
-    /// set the deal via [`Engine::set_deal`] beforehand.
+    /// set the deal via [`Engine::set_deal_tables`] + [`Engine::init_pos`]
+    /// beforehand.
     pub(crate) fn search_target(
         &mut self,
         pos: &mut Pos,
         tt: &mut TransTable,
         ini_depth: i32,
+        hint: i32,
     ) -> i32 {
         self.search_target_calls += 1;
         self.ini_depth = ini_depth;
@@ -1123,18 +1130,27 @@ impl Engine {
             return 0;
         }
 
+        // Hint-anchored ±1 stepping walk (vendor `SolveSameBoard`,
+        // SolverIF.cpp): probe the guess itself; a true result raises
+        // the lower bound and steps up, a false result caps the upper
+        // bound and steps down. With an exact hint this needs just two
+        // probes (hint true, hint+1 false), and every probe lands next
+        // to the previous one, where the transposition table is warm.
+        // Result-equivalent to bisection: the loop maintains
+        // `lowerbound <= true count <= upperbound` and only exits when
+        // the two meet.
+        let mut guess = hint.clamp(0, upperbound);
         #[cfg(not(target_arch = "wasm32"))]
         let mut iter_idx = 0u32;
-        while lowerbound < upperbound {
+        loop {
             self.bisection_iters += 1;
-            let target = (lowerbound + upperbound + 1) / 2;
             self.reset_best_moves();
             // `Instant::now` panics on wasm32-unknown-unknown (no clock), so
             // the per-iteration timing diagnostics are native-only; on wasm
             // `iter1_nanos`/`later_nanos` simply stay 0.
             #[cfg(not(target_arch = "wasm32"))]
             let t0 = std::time::Instant::now();
-            let val = self.ab_search_0(pos, tt, target, ini_depth);
+            let val = self.ab_search_0(pos, tt, guess, ini_depth);
             #[cfg(not(target_arch = "wasm32"))]
             {
                 iter_idx += 1;
@@ -1146,9 +1162,14 @@ impl Engine {
                 }
             }
             if val {
-                lowerbound = target;
+                lowerbound = guess;
+                guess += 1;
             } else {
-                upperbound = target - 1;
+                guess -= 1;
+                upperbound = guess;
+            }
+            if lowerbound >= upperbound {
+                break;
             }
         }
 
@@ -1196,7 +1217,7 @@ mod tests {
         eng.set_deal(&mut pos, &mut tt);
 
         // ini_depth = 0 — no tricks remaining.
-        let tricks = eng.search_target(&mut pos, &mut tt, 0);
+        let tricks = eng.search_target(&mut pos, &mut tt, 0, 0);
         assert_eq!(tricks, 0);
     }
 
@@ -1224,7 +1245,7 @@ mod tests {
         eng.set_node_types([MAXNODE, MINNODE, MAXNODE, MINNODE]);
         eng.set_deal(&mut pos, &mut tt);
 
-        let tricks = eng.search_target(&mut pos, &mut tt, ini_depth);
+        let tricks = eng.search_target(&mut pos, &mut tt, ini_depth, 0);
         assert_eq!(tricks, 1, "MAX should win 1 trick with the A");
     }
 
@@ -1254,7 +1275,7 @@ mod tests {
         eng.set_node_types([MAXNODE, MINNODE, MAXNODE, MINNODE]);
         eng.set_deal(&mut pos, &mut tt);
 
-        let tricks = eng.search_target(&mut pos, &mut tt, ini_depth);
+        let tricks = eng.search_target(&mut pos, &mut tt, ini_depth, 0);
         assert_eq!(tricks, 0, "MAX should win 0 tricks (MIN owns the A)");
     }
 
@@ -1304,7 +1325,7 @@ mod tests {
         eng.set_node_types([MAXNODE, MINNODE, MAXNODE, MINNODE]);
         eng.set_deal(&mut pos, &mut tt);
 
-        let tricks = eng.search_target(&mut pos, &mut tt, ini_depth);
+        let tricks = eng.search_target(&mut pos, &mut tt, ini_depth, 0);
         assert_eq!(
             tricks, 2,
             "NS should win exactly 2 tricks (the two aces they hold)"
