@@ -666,12 +666,22 @@ impl Engine {
         let hand = pos.first[depth_u];
         let tricks = depth >> 2;
 
+        // Widened once per node; still valid at the TT store below —
+        // the move loop's make/undo pairs restore `pos.aggr` exactly,
+        // and the quick/later-tricks helpers never touch it.
+        let aggr_u32 = [
+            u32::from(pos.aggr[0]),
+            u32::from(pos.aggr[1]),
+            u32::from(pos.aggr[2]),
+            u32::from(pos.aggr[3]),
+        ];
+
         pos.win_ranks[depth_u] = [0; DDS_SUITS];
         stat!(self.stats.node0_entries += 1;);
 
         if depth >= 20
             && (tricks as usize) < 12
-            && let Some(value) = self.tt_lookup(pos, tt, target, depth, tricks, hand)
+            && let Some(value) = self.tt_lookup(pos, tt, target, depth, tricks, hand, &aggr_u32)
         {
             stat!(self.stats.exit_tt_early += 1;);
             return value;
@@ -747,7 +757,7 @@ impl Engine {
         // ----- TT lookup (depth < 20 path) -----------------------------------
         if depth < 20
             && (tricks as usize) < 12
-            && let Some(value) = self.tt_lookup(pos, tt, target, depth, tricks, hand)
+            && let Some(value) = self.tt_lookup(pos, tt, target, depth, tricks, hand, &aggr_u32)
         {
             stat!(self.stats.exit_tt_late += 1;);
             return value;
@@ -827,13 +837,6 @@ impl Engine {
             let flag = (self.node_type_store[hand_u] == MAXNODE && value)
                 || (self.node_type_store[hand_u] == MINNODE && !value);
 
-            // The TT API wants `aggr` as u32 and `win_ranks` as u16.
-            let aggr_u32 = [
-                u32::from(pos.aggr[0]),
-                u32::from(pos.aggr[1]),
-                u32::from(pos.aggr[2]),
-                u32::from(pos.aggr[3]),
-            ];
             tt.add(tricks, hand, &aggr_u32, pos.win_ranks[depth_u], first, flag);
             stat!(self.stats.tt_stores += 1;);
         }
@@ -845,6 +848,7 @@ impl Engine {
     /// boolean outcome (and update `pos.win_ranks[depth]` /
     /// `best_move_tt[depth]`).
     #[inline]
+    #[allow(clippy::too_many_arguments)]
     fn tt_lookup(
         &mut self,
         pos: &mut Pos,
@@ -853,6 +857,7 @@ impl Engine {
         depth: i32,
         tricks: i32,
         hand: i32,
+        aggr_u32: &[u32; 4],
     ) -> Option<bool> {
         let depth_u = depth as usize;
         let limit = if self.node_type_store[0] == MAXNODE {
@@ -860,18 +865,12 @@ impl Engine {
         } else {
             tricks - (target - pos.tricks_max - 1)
         };
-        let aggr_u32 = [
-            u32::from(pos.aggr[0]),
-            u32::from(pos.aggr[1]),
-            u32::from(pos.aggr[2]),
-            u32::from(pos.aggr[3]),
-        ];
         let mut lower_flag = false;
         stat!(self.stats.tt_lookups += 1;);
         let cards = tt.lookup(
             tricks,
             hand,
-            &aggr_u32,
+            aggr_u32,
             &pos.hand_dist,
             limit,
             &mut lower_flag,
