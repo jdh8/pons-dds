@@ -111,6 +111,12 @@ impl TrickCountTable {
 pub struct Solver {
     engine: Engine,
     tt: TransTable,
+    /// `rank_in_suit` of the deal whose per-deal tables (`engine.rel`
+    /// and the TT aggregator) are currently built. Lets a repeated
+    /// [`Solver::solve`] of the same deal — e.g. the next strain —
+    /// skip [`Engine::set_deal_tables`]; the tables are strain- and
+    /// declarer-independent.
+    deal_key: Option<[[u16; 4]; 4]>,
 }
 
 impl Solver {
@@ -122,6 +128,7 @@ impl Solver {
         Self {
             engine: Engine::new(strain),
             tt: TransTable::new(),
+            deal_key: None,
         }
     }
 
@@ -141,6 +148,7 @@ impl Solver {
         Self {
             engine: Engine::new(strain),
             tt: TransTable::with_memory(default_mb, max_mb),
+            deal_key: None,
         }
     }
 
@@ -175,11 +183,15 @@ impl Solver {
         self.tt.reset();
 
         // The per-deal tables (`engine.rel`, TT aggregator) depend only
-        // on which hand holds which card — invariant across the 4
-        // declarers, so build them once (vendor: `SolveSameBoard` skips
-        // all setup on repeat solves of the same cards).
+        // on which hand holds which card — invariant across declarer
+        // AND strain, so build them once per deal and skip the rebuild
+        // when the same deal comes back for its next strain (vendor:
+        // `SolveSameBoard` skips all setup on repeat solves).
         let base_pos = pos_from_deal(&deal);
-        self.engine.set_deal_tables(&base_pos, &mut self.tt);
+        if self.deal_key != Some(base_pos.rank_in_suit) {
+            self.engine.set_deal_tables(&base_pos, &mut self.tt);
+            self.deal_key = Some(base_pos.rank_in_suit);
+        }
 
         let mut row = [0u8; 4];
         for (seat_idx, declarer) in SEATS.iter().enumerate() {
