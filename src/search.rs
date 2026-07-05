@@ -267,32 +267,16 @@ impl Engine {
     // Per-deal setup: rel table, TT init, winner / second_best, hand_dist
     // ------------------------------------------------------------------
 
-    /// Populate the per-deal `rel` table from `pos.rank_in_suit`,
-    /// initialize `pos.winner` / `pos.second_best` / `pos.length` /
-    /// `pos.aggr` / `pos.hand_dist`, and call `tt.init(handLookup)`.
+    /// Build the per-deal tables — the `rel` table and the TT's
+    /// aggregator table (via `tt.init`) — from `pos.rank_in_suit`.
     ///
-    /// Mirrors the joint effect of `SetDeal` + `SetDealTables` +
-    /// `InitWinners` in the vendor's `Init.cpp`.
-    pub(crate) fn set_deal(&mut self, pos: &mut Pos, tt: &mut TransTable) {
-        // --- SetDeal: aggr, length, hand_dist ---
-        for s in 0..DDS_SUITS {
-            pos.aggr[s] = 0;
-            for h in 0..DDS_HANDS {
-                pos.aggr[s] |= pos.rank_in_suit[h][s];
-            }
-        }
-        for h in 0..DDS_HANDS {
-            for s in 0..DDS_SUITS {
-                pos.length[h][s] = pos.rank_in_suit[h][s].count_ones() as u8;
-            }
-        }
-        for h in 0..DDS_HANDS {
-            pos.hand_dist[h] = (i32::from(pos.length[h][0]) << 8)
-                | (i32::from(pos.length[h][1]) << 4)
-                | i32::from(pos.length[h][2]);
-        }
-
-        // --- SetDealTables: handLookup + rel + tt.init ---
+    /// Both depend only on *which hand holds which card*, so this is
+    /// invariant across declarer and strain: call it once per deal and
+    /// reuse the result for all 20 `(strain, declarer)` searches.
+    /// Mirrors the vendor's `SetDealTables`; the per-`Pos` counterpart
+    /// is [`Engine::init_pos`].
+    pub(crate) fn set_deal_tables(&mut self, pos: &Pos, tt: &mut TransTable) {
+        // --- handLookup: topmost holder of each (suit, rank) ---
         let mut hand_lookup = [[0i32; 15]; DDS_SUITS];
         for (s, suit_lookup) in hand_lookup.iter_mut().enumerate() {
             for r in (2..=14).rev() {
@@ -340,11 +324,33 @@ impl Engine {
                 self.rel[aggr as usize].abs_rank[1][s].rank = top_bit_no as i32;
             }
         }
+    }
 
-        // --- InitWinners ---
-        // For a position where no cards have been pre-played, we use
-        // pos.aggr directly (matches the vendor's InitWinners with
-        // posPoint.handRelFirst == 0).
+    /// Initialize the per-`Pos` derived fields (`aggr`, `length`,
+    /// `hand_dist`, `winner`, `second_best`) from `pos.rank_in_suit`.
+    ///
+    /// Reads `self.rel`, so [`Engine::set_deal_tables`] must have run
+    /// for this deal first. Called once per declarer search. Mirrors
+    /// the vendor's `SetDeal` + `InitWinners` (with no pre-played
+    /// cards, `handRelFirst == 0`).
+    pub(crate) fn init_pos(&self, pos: &mut Pos) {
+        for s in 0..DDS_SUITS {
+            pos.aggr[s] = 0;
+            for h in 0..DDS_HANDS {
+                pos.aggr[s] |= pos.rank_in_suit[h][s];
+            }
+        }
+        for h in 0..DDS_HANDS {
+            for s in 0..DDS_SUITS {
+                pos.length[h][s] = pos.rank_in_suit[h][s].count_ones() as u8;
+            }
+        }
+        for h in 0..DDS_HANDS {
+            pos.hand_dist[h] = (i32::from(pos.length[h][0]) << 8)
+                | (i32::from(pos.length[h][1]) << 4)
+                | i32::from(pos.length[h][2]);
+        }
+
         for s in 0..DDS_SUITS {
             let a = pos.aggr[s] as usize;
             pos.winner[s] = HighCard {
@@ -356,6 +362,15 @@ impl Engine {
                 hand: self.rel[a].abs_rank[2][s].hand,
             };
         }
+    }
+
+    /// Convenience wrapper: [`Engine::set_deal_tables`] followed by
+    /// [`Engine::init_pos`]. The production driver calls the two parts
+    /// separately (tables once per deal); only tests want them fused.
+    #[cfg(test)]
+    pub(crate) fn set_deal(&mut self, pos: &mut Pos, tt: &mut TransTable) {
+        self.set_deal_tables(pos, tt);
+        self.init_pos(pos);
     }
 
     // ------------------------------------------------------------------

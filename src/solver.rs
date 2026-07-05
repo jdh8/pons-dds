@@ -174,6 +174,13 @@ impl Solver {
         // and would be incorrect after a strain change.
         self.tt.reset();
 
+        // The per-deal tables (`engine.rel`, TT aggregator) depend only
+        // on which hand holds which card — invariant across the 4
+        // declarers, so build them once (vendor: `SolveSameBoard` skips
+        // all setup on repeat solves of the same cards).
+        let base_pos = pos_from_deal(&deal);
+        self.engine.set_deal_tables(&base_pos, &mut self.tt);
+
         let mut row = [0u8; 4];
         for (seat_idx, declarer) in SEATS.iter().enumerate() {
             // Opening leader = declarer's LHO; declarer plays third.
@@ -188,15 +195,12 @@ impl Solver {
             };
             self.engine.set_node_types(node_types);
 
-            // Rebuild Pos from scratch — cheap (~3 KiB struct) and
-            // avoids having to remember which depth-indexed history
-            // slots were touched by the previous search.
-            let mut pos = pos_from_deal(&deal);
+            // Fresh Pos per declarer — cheap (~3 KiB copy) and avoids
+            // having to remember which depth-indexed history slots were
+            // touched by the previous search.
+            let mut pos = base_pos;
             pos.first[INI_DEPTH as usize] = leader as i32;
-
-            // `set_deal` fills aggr/length/hand_dist/winner/
-            // second_best from `rank_in_suit` and calls `tt.init`.
-            self.engine.set_deal(&mut pos, &mut self.tt);
+            self.engine.init_pos(&mut pos);
 
             let tricks = self.engine.search_target(&mut pos, &mut self.tt, INI_DEPTH);
             debug_assert!((0..=13).contains(&tricks), "tricks out of range");
