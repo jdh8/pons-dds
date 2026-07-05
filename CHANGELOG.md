@@ -6,6 +6,19 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-07-05
+
+### Fixed
+
+- The solver no longer aborts on `wasm32-unknown-unknown`: the bisection
+  loop's always-on iteration timing called `std::time::Instant::now()`, which
+  panics on wasm (no clock). The timing diagnostics
+  (`SearchStats::iter1_nanos` / `later_nanos`) are now native-only and stay 0
+  on wasm; native behavior is unchanged. Callers targeting wasm should drive
+  the single-threaded paths (`Solver`, `solve_deal_on`) and raise the shadow
+  stack (e.g. `-Clink-arg=-zstack-size=16777216`) — the deep search overflows
+  wasm's 1 MiB default.
+
 ## [0.1.1] - 2026-05-31
 
 ### Added
