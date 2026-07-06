@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1783257139703,
+  "lastUpdate": 1783316527178,
   "repoUrl": "https://github.com/jdh8/pons-dds",
   "entries": {
     "Benchmark": [
@@ -587,6 +587,48 @@ window.BENCHMARK_DATA = {
             "name": "solve_deals/200",
             "value": 24041080515,
             "range": "± 728278829",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "committer": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "distinct": true,
+          "id": "65d2c1d4e609ca017998bc5283cfe1186deacb75",
+          "message": "docs(changelog): record the optimization pass\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>",
+          "timestamp": "2026-07-06T08:07:02+08:00",
+          "tree_id": "670b19c083d148d089b8de35b4457ee4762ad59e",
+          "url": "https://github.com/jdh8/pons-dds/commit/65d2c1d4e609ca017998bc5283cfe1186deacb75"
+        },
+        "date": 1783316526268,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "solve_deal",
+            "value": 78853689,
+            "range": "± 166953700",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/32",
+            "value": 2863437692,
+            "range": "± 62913951",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/200",
+            "value": 20382128174,
+            "range": "± 724267473",
             "unit": "ns/iter"
           }
         ]
