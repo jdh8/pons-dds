@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1783316527178,
+  "lastUpdate": 1783321145903,
   "repoUrl": "https://github.com/jdh8/pons-dds",
   "entries": {
     "Benchmark": [
@@ -629,6 +629,48 @@ window.BENCHMARK_DATA = {
             "name": "solve_deals/200",
             "value": 20382128174,
             "range": "± 724267473",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "committer": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "distinct": true,
+          "id": "9ebcb21101b8430725e69eac4024636220a257e1",
+          "message": "perf: retain the TT page pool across per-strain resets\n\nreset() truncated the page Vec to one page while the allocator handed\nblocks out of pages.len()-1, so every strain re-malloc'd and zeroed\nfresh 6.2 MiB pages. Track next_page/next_slot explicitly and keep\npages_default pages alive across reset (vendor ResetMemory parity),\nreusing the slabs and only rewinding each block's counters on hand-out.\n\nCuts page allocations ~4210 to ~54 per 200 sequential deals (~26 GB to\n~0.3 GB of malloc+memset). Single-thread bisection_stats ~3% faster; a\n1000-deal parallel batch ~10% faster (p<0.05), narrowing the same-run\ngap to ddss from 1.26x to 1.13x with ddss itself flat (p=0.33) so\nthermal drift is ruled out. Bit-for-bit unchanged (10k-deal soak).\nNet -13 LOC.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+          "timestamp": "2026-07-06T14:36:06+08:00",
+          "tree_id": "a6c60c2e57b01a6bd309ad353354ea24b5819932",
+          "url": "https://github.com/jdh8/pons-dds/commit/9ebcb21101b8430725e69eac4024636220a257e1"
+        },
+        "date": 1783321145597,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "solve_deal",
+            "value": 87304932,
+            "range": "± 183898435",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/32",
+            "value": 2971305543,
+            "range": "± 41404643",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/200",
+            "value": 21476058536,
+            "range": "± 825753290",
             "unit": "ns/iter"
           }
         ]
