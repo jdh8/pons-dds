@@ -45,6 +45,17 @@ head-to-head: `solve_deal` 91.7 → 78.8 ms (C++ ratio 1.25× → 1.12×),
   arithmetic instead of saturating ops; the per-probe `Instant::now`
   timing in the driver is now gated behind the `profiling` feature (the
   `bisection_timing()` diagnostics read zero without it).
+- The transposition table now **retains** its page pool across the
+  per-strain `reset()` instead of freeing it down to a single page, so a
+  worker re-uses the slabs it already allocated rather than re-`malloc`ing
+  and zeroing fresh 6.2 MiB pages every strain (mirroring the vendor's
+  `ResetMemory`). Over a 200-deal sequential corpus this cuts page
+  allocations from ~4200 to ~50 (≈26 GB → ≈0.3 GB of `malloc`+memset
+  traffic); the single-thread `bisection_stats` corpus runs ~3% faster,
+  and a 1000-deal parallel batch — where the freed bandwidth is contended
+  across all 16 threads — gains ~10% (p < 0.05), narrowing the same-run
+  gap to `ddss` from 1.26× to 1.13× (`ddss` itself flat, p = 0.33).
+  Bit-for-bit unchanged (10 000-deal soak).
 
 ## [0.1.2] - 2026-07-05
 

@@ -24,8 +24,9 @@
 //! `WinBlock`s live in a `Vec<Page>` where each page is a boxed slab of
 //! [`BLOCKS_PER_PAGE`] (= 1000) blocks. Pages are added on demand up to
 //! `pages_maximum`; [`TransTable::reset`] drops pages above
-//! `pages_default`. A simple bump-pointer (page index + offset) inside
-//! the most recent page hands out new blocks.
+//! `pages_default` but keeps the rest allocated for reuse. A simple
+//! bump-pointer (`next_page` + `next_slot`) walks the retained pages
+//! from page 0 and hands out blocks, re-`reset`ting each on the way.
 //!
 //! # Divergences from the vendor
 //!
@@ -291,10 +292,17 @@ pub struct TransTable {
 
     // ---- Storage substrate ----
     /// All allocated pages. Indices into this are page numbers; each
-    /// page holds [`BLOCKS_PER_PAGE`] blocks.
+    /// page holds [`BLOCKS_PER_PAGE`] blocks. Grows on demand up to
+    /// `pages_maximum` and shrinks only to `pages_default` on
+    /// [`Self::reset`] — pages within the default budget are retained
+    /// and reused, not re-`malloc`ed, between solves.
     pages: Vec<Page>,
-    /// Slot index within the most recent page to allocate next. When
-    /// this hits [`BLOCKS_PER_PAGE`] we need a fresh page.
+    /// Page the bump allocator is currently filling. Pages below it are
+    /// full; pages `next_page..pages.len()` are pre-allocated and
+    /// retained across [`Self::reset`] for reuse.
+    next_page: u32,
+    /// Next free slot within `next_page`. When it reaches
+    /// [`BLOCKS_PER_PAGE`] the allocator advances to the next page.
     next_slot: u32,
 
     // ---- Hash table root ----
@@ -337,7 +345,8 @@ impl TransTable {
             pages_default: Self::mb_to_pages(default_mb),
             pages_maximum: Self::mb_to_pages(max_mb),
             pages: Vec::new(),
-            next_slot: BLOCKS_PER_PAGE as u32, // forces a fresh page on first alloc
+            next_page: 0,
+            next_slot: 0,
             tt_root: std::array::from_fn(|_| {
                 std::array::from_fn(|_| {
                     vec![DistHash::default(); TT_HASH_BUCKETS]
@@ -452,85 +461,66 @@ impl TransTable {
         }
     }
 
-    /// Reset to "between solves" state — drops pages above
-    /// `pages_default`, clears all hash entries and `last_block_seen`,
-    /// and resets the bump pointer to the start of page 0.
+    /// Reset to "between solves" state — clears all hash entries and
+    /// `last_block_seen` and rewinds the bump pointer to page 0, slot 0.
+    ///
+    /// Mirrors the vendor's `ResetMemory`: pages up to `pages_default`
+    /// are **retained** (their slabs are reused by the next solve, only
+    /// re-`reset()` per block on hand-out), and only the overflow above
+    /// the default budget is freed. Retained blocks never leak stale
+    /// data — a block is only read after `get_next_card_block` rewinds
+    /// its counters, and `init_tt` drops every bucket's reference to it.
     pub(crate) fn reset(&mut self) {
-        // Mirror ResetMemory: keep `pages_default` pages, truncate the
-        // rest, reset bump pointer.
-        if self.pages.is_empty() {
-            self.init_tt();
-            self.timestamp = 0;
-            return;
-        }
-
         if self.pages.len() as u32 > self.pages_default {
             self.pages.truncate(self.pages_default as usize);
         }
-        // Reset bump pointer to start of page 0 — but only if we have at
-        // least one page kept. Otherwise next allocation will create one.
-        self.next_slot = if self.pages.is_empty() {
-            BLOCKS_PER_PAGE as u32
-        } else {
-            // Pretend we're at the END of the highest kept page → next
-            // alloc reuses page 0. We emulate this by setting next_slot
-            // = 0 and truncating to length 1 (then push pages 1..n-1
-            // when we exhaust). Easier: just drop all pages, since the
-            // vendor's "keep pages_default" optimization is for cold
-            // memory; correctness only requires that we have *room* for
-            // pages_default.
-            //
-            // For porting fidelity: keep one page, reset bump to 0.
-            self.pages.truncate(1);
-            0
-        };
-
+        self.next_page = 0;
+        self.next_slot = 0;
         self.init_tt();
         self.timestamp = 0;
     }
 
     // ---- Block allocation ------------------------------------------
 
-    /// Return a fresh block, growing the pool by a page if needed. May
-    /// trigger a full `reset()` when the budget is exhausted (see
-    /// "Divergences from the vendor" in the module docs).
+    /// Return a fresh block from the bump allocator. Advances to the
+    /// next page when the current one is full, reusing a retained page
+    /// if one is available and otherwise growing the pool. May trigger a
+    /// full `reset()` when the budget is exhausted (see "Divergences
+    /// from the vendor" in the module docs).
     fn get_next_card_block(&mut self) -> BlockId {
-        // Common path: bump the slot within the current last page.
-        if self.next_slot < BLOCKS_PER_PAGE as u32 {
-            let page_idx = (self.pages.len() - 1) as u32;
-            let slot = self.next_slot;
-            self.next_slot += 1;
-            let block_id = BlockId::from_indices(page_idx, slot);
-            // Initialize the block to default — the vendor uses
-            // malloc'd (uninitialized) memory but always overwrites
-            // before reading; we're explicit here to keep `unsafe` out.
-            self.pages[page_idx as usize][slot as usize].reset();
-            return block_id;
+        // Advance to the next page once the current one is exhausted.
+        if self.next_slot >= BLOCKS_PER_PAGE as u32 {
+            self.next_page += 1;
+            self.next_slot = 0;
         }
 
-        // Need a new page. Three cases:
-        //   1. We're below the maximum → allocate one.
-        //   2. At maximum → reset (drops back to pages_default) and
-        //      try again.
-        if (self.pages.len() as u32) < self.pages_maximum {
-            self.pages.push(Self::new_page());
-            self.next_slot = 1;
-            let page_idx = (self.pages.len() - 1) as u32;
-            let block_id = BlockId::from_indices(page_idx, 0);
-            self.pages[page_idx as usize][0].reset();
-            block_id
-        } else {
-            // Out of budget. Vendor would harvest; we just reset.
-            self.reset();
-            // After reset, pages.len() <= pages_default. Allocate
-            // something fresh.
-            if self.pages.is_empty() {
+        // Ensure `next_page` points at an allocated slab. Retained pages
+        // (`next_page < pages.len()`) are reused as-is; otherwise grow
+        // the pool, or reset when the budget is spent. The `is_empty`
+        // guard keeps progress even for a sub-one-page budget (where
+        // `pages_maximum` rounds to 0), which would otherwise loop
+        // reset → empty → at-max → reset forever.
+        if self.next_page as usize >= self.pages.len() {
+            if (self.pages.len() as u32) < self.pages_maximum || self.pages.is_empty() {
                 self.pages.push(Self::new_page());
-                self.next_slot = 0;
+            } else {
+                // Out of budget. Vendor would harvest; we just reset,
+                // which rewinds to (page 0, slot 0) over the retained
+                // pages — then restart the allocation.
+                self.reset();
+                return self.get_next_card_block();
             }
-            // Recurse — we now have room.
-            self.get_next_card_block()
         }
+
+        let page_idx = self.next_page;
+        let slot = self.next_slot;
+        self.next_slot += 1;
+        let block_id = BlockId::from_indices(page_idx, slot);
+        // Rewind the block's counters before handing it out — a retained
+        // slab still holds a previous solve's entries, but they become
+        // unreachable once the counters are zero.
+        self.pages[page_idx as usize][slot as usize].reset();
+        block_id
     }
 
     fn new_page() -> Page {
@@ -1225,5 +1215,57 @@ mod tests {
             tt.add(5, 0, &aggr_target, win_ranks, cards, true);
         }
         assert!(tt.pages.len() > initial_pages);
+    }
+
+    #[test]
+    fn retained_pages_survive_reset() {
+        // After a solve fills several pages, reset must keep up to
+        // `pages_default` of them allocated (not re-`malloc` on the next
+        // solve).
+        let mut tt = TransTable::with_memory(20, 40);
+        tt.init(&dummy_hand_lookup());
+        let aggr_target = [0x1fff_u32; 4];
+        let win_ranks = [0x1c00_u16; 4];
+        let cards = NodeCards::default();
+        for i in 0..3000i32 {
+            let hd = [i & 0xfff, (i * 2) & 0xfff, (i * 3) & 0xfff, (i * 5) & 0xfff];
+            let mut lf = false;
+            let _ = tt.lookup(5, 0, &aggr_target, &hd, 3, &mut lf);
+            tt.add(5, 0, &aggr_target, win_ranks, cards, true);
+        }
+        assert!(tt.pages.len() > 1, "multi-page working set expected");
+        let kept = tt.pages.len().min(tt.pages_default as usize);
+        tt.reset();
+        assert_eq!(
+            tt.pages.len(),
+            kept,
+            "reset must retain pages_default pages"
+        );
+        assert_eq!(tt.next_page, 0);
+        assert_eq!(tt.next_slot, 0);
+    }
+
+    #[test]
+    fn sub_one_page_budget_terminates() {
+        // `pages_maximum` rounds to 0 for a 1 MiB ceiling; the allocator
+        // must still make progress (force one page) rather than loop
+        // reset → empty → at-max → reset.
+        let mut tt = TransTable::with_memory(1, 1);
+        assert_eq!(tt.pages_maximum, 0, "1 MiB should round to 0 pages");
+        tt.init(&dummy_hand_lookup());
+        let aggr_target = [0x1fff_u32; 4];
+        let win_ranks = [0x1c00_u16; 4];
+        let cards = NodeCards::default();
+        // Enough inserts to exceed one page (1000 blocks) and force the
+        // budget-exhausted reset path repeatedly.
+        for i in 0..5000i32 {
+            let hd = [i & 0xfff, (i * 2) & 0xfff, (i * 3) & 0xfff, (i * 5) & 0xfff];
+            let mut lf = false;
+            let _ = tt.lookup(5, 0, &aggr_target, &hd, 3, &mut lf);
+            tt.add(5, 0, &aggr_target, win_ranks, cards, true);
+        }
+        // Reaching here without hanging is the assertion; sanity-check
+        // the pool never grew past the (zero) budget's forced page.
+        assert_eq!(tt.pages.len(), 1);
     }
 }
