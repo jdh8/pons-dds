@@ -6,6 +6,46 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+### Performance
+
+A solver-wide optimization pass closing most of the gap to the DDS 2.9 C++
+reference (`ddss`). On an 8c/16t Ryzen 7 8700F, same-run criterion
+head-to-head: `solve_deal` 91.7 → 78.8 ms (C++ ratio 1.25× → 1.12×),
+`solve_deals/32` 24.4 → 20.0 ms/deal (1.46× → 1.21×), `solve_deals/200`
+25.4 → 22.8 ms/deal (1.43× → 1.29×). Results are bit-for-bit unchanged
+(verified against `ddss` over a 10 000-deal soak).
+
+- The per-deal tables (the 8192-entry `rel` table and the transposition
+  table's aggregator) are now built once per deal instead of once per
+  declarer, and reused across strains via a deal fingerprint on `Solver` —
+  they depend only on which hand holds which card. 20 rebuilds per deal
+  become 1, mirroring the vendor's `SolveSameBoard` setup reuse.
+- `search_target` replaces its midpoint bisection over the trick target
+  with the vendor's hint-anchored ±1 stepping walk (`SolveSameBoard` /
+  `CalcSingleCommon`): the partner of a solved declarer is seeded with that
+  score, an opponent with its complement. Probes per declarer drop from
+  3.86 to 2.55, and successive probes land next to targets the warm
+  transposition table has already seen.
+- The six 8192-entry lookup tables (`HIGHEST_RANK`, `LOWEST_RANK`,
+  `COUNT_TABLE`, `REL_RANK`, `WIN_RANKS`, `GROUP_DATA`) and the two
+  transposition-table constants (`TT_LOWEST_RANK`, `MASK_BYTES`) are built
+  at compile time by `const fn`s instead of `LazyLock`s — a hot-path read
+  is now a direct `.rodata` load with no atomic init-check or pointer
+  indirection. This was the single largest win (−23% on the parallel
+  batch).
+- `AbsRank` is packed to the vendor's 2-byte layout (`i8` rank/hand),
+  shrinking the randomly-probed per-deal `rel` table from 3.93 MB to
+  960 KiB — it now fits a Zen 4 core's L2 instead of 16 threads fighting
+  over L3.
+- The quick-tricks/later-tricks `abs_rank` helpers read the `rel` table
+  (one load) instead of scanning 13 ranks × 4 hands, matching
+  `QuickTricks.cpp`.
+- Assorted hot-path trims: the `[u32; 4]` aggr widening for the
+  transposition table is computed once per lead node; make/undo use plain
+  arithmetic instead of saturating ops; the per-probe `Instant::now`
+  timing in the driver is now gated behind the `profiling` feature (the
+  `bisection_timing()` diagnostics read zero without it).
+
 ## [0.1.2] - 2026-07-05
 
 ### Fixed
