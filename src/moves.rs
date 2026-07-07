@@ -188,6 +188,23 @@ impl Moves {
     /// `tpos`. Analogue of the loop in vendor's `Init` that turns the
     /// initial position into the played-cards bitmap.
     pub(crate) fn init_removed_ranks(&mut self, tricks: i32, tpos: &Pos) {
+        self.init_removed_ranks_with_table(tricks, tpos, &[]);
+    }
+
+    /// Like [`Moves::init_removed_ranks`], but for a trick with `table`
+    /// — `(suit, rank)` in DDS encoding — already played to it.
+    ///
+    /// Cards on the table this trick are XOR-ed back *out* of the
+    /// removed set (vendor `Init`, Moves.cpp:138-144): ranks played in
+    /// **earlier** tricks merge adjacent cards into one sequence, but
+    /// the current trick's table cards must not — they are still live
+    /// for equivalence purposes until the trick completes.
+    pub(crate) fn init_removed_ranks_with_table(
+        &mut self,
+        tricks: i32,
+        tpos: &Pos,
+        table: &[(i32, i32)],
+    ) {
         let idx = tricks as usize;
         for s in 0..DDS_SUITS {
             // 0xffff is what the vendor starts with; we XOR off
@@ -198,6 +215,9 @@ impl Moves {
                 removed ^= i32::from(tpos.rank_in_suit[h][s]);
             }
             self.track[idx].removed_ranks[s] = removed;
+        }
+        for &(s, r) in table {
+            self.track[idx].removed_ranks[s as usize] ^= i32::from(BIT_MAP_RANK[r as usize]);
         }
     }
 
@@ -2223,6 +2243,30 @@ mod tests {
         // i.e. 0x1fff. Starting from 0xffff and XOR-ing off the deck
         // gives 0xffff ^ 0x1fff = 0xe000.
         assert_eq!(m.track[12].removed_ranks[0], 0xffff ^ 0x1fff);
+    }
+
+    /// Cards on the table this trick are XOR-ed back out of the removed
+    /// set: a rank absent from every hand normally counts as removed
+    /// (merging the sequence around it), but not while it sits on the
+    /// table of the current trick.
+    #[test]
+    fn init_removed_ranks_with_table_keeps_table_cards_live() {
+        // Spades: N holds K and J; the Q is on the table (in no hand).
+        let mut p = Pos::default();
+        p.rank_in_suit[0][0] = BIT_MAP_RANK[13] | BIT_MAP_RANK[11];
+
+        let mut m = Moves::new();
+        m.init_removed_ranks(12, &p);
+        let removed_without_table = m.track[12].removed_ranks[0];
+        // The Q counts as removed → K-J would merge into one sequence.
+        assert_ne!(removed_without_table & i32::from(BIT_MAP_RANK[12]), 0);
+
+        m.init_removed_ranks_with_table(12, &p, &[(0, 12)]);
+        // With the Q on the table it is live again: same mask minus Q.
+        assert_eq!(
+            m.track[12].removed_ranks[0],
+            removed_without_table ^ i32::from(BIT_MAP_RANK[12])
+        );
     }
 
     #[test]

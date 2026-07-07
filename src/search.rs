@@ -180,6 +180,12 @@ pub struct Engine {
     /// stack.
     rel: Box<[RelRanks; 8192]>,
 
+    /// Completed-trick node counter (vendor `trickNodes`): incremented
+    /// once per move tried in [`Engine::ab_search_3`], accumulated
+    /// across every probe until the driver resets it. Reported as the
+    /// approximate `nodes` field of `FoundPlays`.
+    pub nodes: u32,
+
     /// Diagnostic counters. Incremented only in the bisection driver
     /// ([`Engine::search_target`]), not in the inner alpha-beta recursion,
     /// so the cost is at most a handful of `+= 1` per `search_target` call.
@@ -298,6 +304,7 @@ impl Engine {
                 .into_boxed_slice()
                 .try_into()
                 .unwrap_or_else(|_| unreachable!()),
+            nodes: 0,
             search_target_calls: 0,
             bisection_iters: 0,
             iter1_nanos: 0,
@@ -358,6 +365,21 @@ impl Engine {
     /// the vendor's `SetDeal` + `InitWinners` (with no pre-played
     /// cards, `handRelFirst == 0`).
     pub(crate) fn init_pos(&self, pos: &mut Pos) {
+        self.init_pos_with_table(pos, [0; DDS_SUITS]);
+    }
+
+    /// [`Engine::init_pos`] for a position with cards already on the
+    /// table: `table_aggr[suit]` is the union bitmap of the current
+    /// trick's played cards.
+    ///
+    /// `aggr` / `length` / `hand_dist` cover the remaining cards only,
+    /// but `winner` / `second_best` are looked up over
+    /// `aggr | table_aggr` (vendor `InitWinners`, Init.cpp:539-571).
+    /// The `rel` table is built from the remaining cards alone, so a
+    /// table card resolves with **hand 0 attribution** — a vendor quirk
+    /// that feeds the quick-tricks heuristics and move weights during
+    /// the first trick and must be preserved, not fixed.
+    pub(crate) fn init_pos_with_table(&self, pos: &mut Pos, table_aggr: [u16; DDS_SUITS]) {
         for s in 0..DDS_SUITS {
             pos.aggr[s] = 0;
             for h in 0..DDS_HANDS {
@@ -375,8 +397,8 @@ impl Engine {
                 | i32::from(pos.length[h][2]);
         }
 
-        for s in 0..DDS_SUITS {
-            let a = pos.aggr[s] as usize;
+        for (s, &table) in table_aggr.iter().enumerate() {
+            let a = (pos.aggr[s] | table) as usize;
             pos.winner[s] = HighCard {
                 rank: i32::from(self.rel[a].abs_rank[1][s].rank),
                 hand: i32::from(self.rel[a].abs_rank[1][s].hand),
@@ -1072,6 +1094,8 @@ impl Engine {
             stat!(move_index += 1;);
 
             self.make3(pos, &mut make_win_rank, depth, &mply);
+            // Vendor `trickNodes` — one bump per completed-trick node.
+            self.nodes = self.nodes.wrapping_add(1);
 
             let new_lead = pos.first[depth_u - 1] as usize;
             let incremented = self.node_type_store[new_lead] == MAXNODE;
@@ -1111,6 +1135,110 @@ impl Engine {
         } else {
             self.stats.allnode_nodes += 1;
         }
+        value
+    }
+
+    // ------------------------------------------------------------------
+    // Root probe (SolveBoard-style roots)
+    // ------------------------------------------------------------------
+
+    /// The cutoff move recorded at `depth` by the last successful
+    /// probe. Only meaningful right after a probe returned `true`.
+    #[allow(dead_code)] // ponytail: consumed by the solve_board driver
+    pub(crate) const fn best_move_at(&self, depth: i32) -> MoveType {
+        self.best_move[depth as usize]
+    }
+
+    /// Install the root forbidden-move list consulted by `purge` at
+    /// `ini_depth`. `moves[0]` is skipped (vendor convention); a rank
+    /// of 0 is the "no move" sentinel.
+    #[allow(dead_code)] // ponytail: consumed by the solve_board driver
+    pub(crate) const fn set_forbidden_moves(&mut self, moves: &[MoveType; 14]) {
+        self.forbidden_moves = *moves;
+    }
+
+    /// Clear the root forbidden-move list (vendor resets it on both
+    /// entry and exit of `SolveBoardInternal`).
+    #[allow(dead_code)] // ponytail: consumed by the solve_board driver
+    pub(crate) fn clear_forbidden_moves(&mut self) {
+        self.forbidden_moves = [MoveType::default(); 14];
+    }
+
+    /// One root alpha-beta probe from a (possibly mid-trick) root,
+    /// returning whether the MAX side reaches `target`. On a cutoff the
+    /// winning move is left in `best_move[ini_depth]`
+    /// ([`Engine::best_move_at`]).
+    ///
+    /// Dispatches by `hand_rel_first` like the vendor's `AB_ptr_list`
+    /// (SolverIF.cpp:50-55): hands 1-3 use the interior searches
+    /// directly — they purge `forbidden_moves` at `ini_depth` and
+    /// `quick_tricks_second_hand` self-gates at the root — while hand 0
+    /// runs the dedicated root move loop below (vendor `ABsearch`),
+    /// because [`Engine::ab_search_0`] could exit through the TT or the
+    /// quick-tricks claims without leaving a best move behind.
+    ///
+    /// Callers must have set `self.ini_depth = ini_depth`, prepared the
+    /// moves track for the root trick (removed ranks, lead hand, replayed
+    /// table cards), and reset the best-move arrays before each probe.
+    #[allow(dead_code)] // ponytail: consumed by the solve_board driver
+    pub(crate) fn root_probe(
+        &mut self,
+        pos: &mut Pos,
+        tt: &mut TransTable,
+        target: i32,
+        ini_depth: i32,
+        hand_rel_first: i32,
+    ) -> bool {
+        debug_assert_eq!(self.ini_depth, ini_depth, "driver must set ini_depth");
+        match hand_rel_first {
+            1 => return self.ab_search_1(pos, tt, target, ini_depth),
+            2 => return self.ab_search_2(pos, tt, target, ini_depth),
+            3 => return self.ab_search_3(pos, tt, target, ini_depth),
+            _ => debug_assert_eq!(hand_rel_first, 0, "hand_rel_first out of range"),
+        }
+
+        // Vendor root `ABsearch` (ABsearch.cpp:62-151): a pure move
+        // loop — no TT probe or store, no quick/later tricks, no
+        // trivial bounds, and an unconditional purge of the forbidden
+        // moves.
+        let depth = ini_depth;
+        let depth_u = depth as usize;
+        let hand = pos.first[depth_u];
+        let tricks = depth >> 2;
+        let success = self.node_type_store[hand as usize] == MAXNODE;
+        let mut value = !success;
+
+        self.lowest_win[depth_u] = [0; DDS_SUITS];
+        let bm = self.best_move[depth_u];
+        let bmtt = self.best_move_tt[depth_u];
+        self.moves
+            .move_gen_0(tricks, pos, &bm, &bmtt, self.rel.as_ref());
+        let fm = self.forbidden_moves;
+        self.moves.purge(tricks, 0, &fm);
+
+        pos.win_ranks[depth_u] = [0; DDS_SUITS];
+
+        loop {
+            let win_arr = pos.win_ranks[depth_u];
+            let mply = self.moves.make_next(tricks, 0, &win_arr);
+            let Some(mply) = mply else { break };
+
+            self.make0(pos, depth, &mply);
+            value = self.ab_search_1(pos, tt, target, depth - 1);
+            self.undo1(pos, depth, &mply);
+
+            let prev = pos.win_ranks[depth_u - 1];
+            if value == success {
+                pos.win_ranks[depth_u] = prev;
+                self.best_move[depth_u] = mply;
+                break;
+            }
+            let cur = &mut pos.win_ranks[depth_u];
+            for ss in 0..DDS_SUITS {
+                cur[ss] |= prev[ss];
+            }
+        }
+
         value
     }
 
@@ -1369,5 +1497,107 @@ mod tests {
             tricks, 2,
             "NS should win exactly 2 tricks (the two aces they hold)"
         );
+    }
+
+    /// `init_pos_with_table` looks winners up over remaining ∪ table
+    /// cards. A table card outranking every remaining card must become
+    /// the suit winner — with the vendor's hand-0 attribution, since
+    /// the `rel` table only knows the remaining cards' holders.
+    #[test]
+    fn init_pos_with_table_winner_attribution() {
+        // Spades: E holds the K, S holds the Q; the A is on the table.
+        let mut rank = [[0u16; 4]; 4];
+        rank[1][0] = BIT_MAP_RANK[13];
+        rank[2][0] = BIT_MAP_RANK[12];
+        // Give every hand a heart so lengths stay sane.
+        rank[0][1] = BIT_MAP_RANK[2];
+        rank[1][1] = BIT_MAP_RANK[3];
+        rank[2][1] = BIT_MAP_RANK[4];
+        rank[3][1] = BIT_MAP_RANK[5];
+
+        let mut pos = build_pos(rank);
+        let mut tt = TransTable::new();
+        let mut eng = Engine::new(Strain::Notrump);
+        eng.set_deal_tables(&pos, &mut tt);
+
+        // No table cards: the K (held by E = hand 1) is the winner.
+        eng.init_pos(&mut pos);
+        assert_eq!(pos.winner[0].rank, 13);
+        assert_eq!(pos.winner[0].hand, 1);
+
+        // The A on the table: it wins the suit, attributed to hand 0
+        // (the vendor quirk — `rel` has no holder for a table card).
+        let table_aggr = [BIT_MAP_RANK[14], 0, 0, 0];
+        eng.init_pos_with_table(&mut pos, table_aggr);
+        assert_eq!(pos.winner[0].rank, 14);
+        assert_eq!(pos.winner[0].hand, 0, "table card attributes to hand 0");
+        assert_eq!(pos.second_best[0].rank, 13);
+        assert_eq!(pos.second_best[0].hand, 1);
+    }
+
+    /// A two-trick endgame where the lead hand's choice decides the
+    /// outcome, exercising `root_probe`'s cutoff move and its
+    /// forbidden-move purge.
+    ///
+    /// Layout (notrump, N leads, NS = MAX):
+    ///   N: ♠A ♠2 — E: ♠K ♥3 — S: ♥4 ♥5 — W: ♠Q ♥6
+    ///
+    /// Leading the ♠A drops the K and Q, promoting the ♠2: MAX takes
+    /// both tricks. Leading the ♠2 first loses both (the ♠K wins, then
+    /// N's bare ♠A is discarded on the heart exit). So MAX makes
+    /// exactly 2, and only via the ♠A.
+    #[test]
+    fn root_probe_finds_cutoff_and_respects_forbidden() {
+        let mut rank = [[0u16; 4]; 4];
+        rank[0][0] = BIT_MAP_RANK[14] | BIT_MAP_RANK[2]; // N: ♠A ♠2
+        rank[1][0] = BIT_MAP_RANK[13]; // E: ♠K
+        rank[1][1] = BIT_MAP_RANK[3]; // E: ♥3
+        rank[2][1] = BIT_MAP_RANK[4] | BIT_MAP_RANK[5]; // S: ♥4 ♥5
+        rank[3][0] = BIT_MAP_RANK[12]; // W: ♠Q
+        rank[3][1] = BIT_MAP_RANK[6]; // W: ♥6
+
+        let mut pos = build_pos(rank);
+        let cc = card_count(&pos);
+        assert_eq!(cc, 8);
+        let ini_depth = cc - 4; // 4
+
+        pos.first[ini_depth as usize] = 0; // North leads
+        let mut tt = TransTable::new();
+        let mut eng = Engine::new(Strain::Notrump);
+        eng.set_node_types([MAXNODE, MINNODE, MAXNODE, MINNODE]);
+        eng.set_deal(&mut pos, &mut tt);
+
+        // Root-track setup the solve_board driver performs.
+        eng.ini_depth = ini_depth;
+        let start_trick = (ini_depth + 3) >> 2;
+        eng.moves.init_removed_ranks(start_trick, &pos);
+        eng.moves.reinit(start_trick, 0);
+
+        // Targets 1 and 2 succeed, and only the ♠A achieves them.
+        for target in [1, 2] {
+            eng.reset_best_moves();
+            assert!(eng.root_probe(&mut pos, &mut tt, target, ini_depth, 0));
+            let mv = eng.best_move_at(ini_depth);
+            assert_eq!((mv.suit, mv.rank), (0, 14), "cutoff move must be the ♠A");
+        }
+
+        // Target 3 exceeds the two remaining tricks.
+        eng.reset_best_moves();
+        assert!(!eng.root_probe(&mut pos, &mut tt, 3, ini_depth, 0));
+
+        // Forbid the ♠A: target 1 becomes unreachable.
+        let mut forbidden = [MoveType::default(); 14];
+        forbidden[1] = MoveType {
+            suit: 0,
+            rank: 14,
+            ..MoveType::default()
+        };
+        eng.set_forbidden_moves(&forbidden);
+        eng.reset_best_moves();
+        assert!(
+            !eng.root_probe(&mut pos, &mut tt, 1, ini_depth, 0),
+            "without the ♠A the lead side wins nothing"
+        );
+        eng.clear_forbidden_moves();
     }
 }
