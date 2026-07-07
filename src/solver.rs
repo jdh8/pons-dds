@@ -15,7 +15,7 @@
 
 use crate::board::Objective;
 use crate::convert::dds_suit_from_cb;
-use crate::play::FoundPlays;
+use crate::play::{FoundPlays, PlayAnalysis, PlayFaultError, PlayTrace};
 use crate::pos::Pos;
 use crate::quick_tricks::{MAXNODE, MINNODE};
 use crate::search::Engine;
@@ -224,6 +224,36 @@ impl Solver {
         // later `solve` rebuilds its own.
         self.deal_key = None;
         crate::solve_board::solve_board_on(&mut self.engine, &mut self.tt, objective)
+    }
+
+    /// Trace double-dummy trick counts before and after each played
+    /// card, from the declarer's viewpoint (declarer = the side not on
+    /// lead at the snapshot). See [`PlayAnalysis`] for the layout.
+    ///
+    /// # Panics
+    ///
+    /// When a trace card is illegal — not held by the player on turn,
+    /// or a revoke. Use [`Solver::try_analyse_play`] for a fallible
+    /// variant.
+    #[must_use]
+    pub fn analyse_play(&mut self, trace: &PlayTrace) -> PlayAnalysis {
+        self.try_analyse_play(trace)
+            .unwrap_or_else(|fault| panic!("{fault}"))
+    }
+
+    /// [`Solver::analyse_play`], returning the first illegal trace card
+    /// as an error instead of panicking.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`PlayFaultError`] naming the offending card when the
+    /// trace contains an illegal play.
+    pub fn try_analyse_play(&mut self, trace: &PlayTrace) -> Result<PlayAnalysis, PlayFaultError> {
+        self.set_strain(trace.board.trump());
+        // The driver rebuilds the TT and per-deal tables for the
+        // snapshot's remaining cards; drop the full-deal fingerprint.
+        self.deal_key = None;
+        crate::analyse::analyse_play_on(&mut self.engine, &mut self.tt, trace)
     }
 }
 
@@ -584,6 +614,76 @@ pub fn solve_boards_with_memory(
     max_mb: u32,
 ) -> Vec<FoundPlays> {
     solve_boards_pooled(objectives, default_mb, max_mb)
+}
+
+/// Trace double-dummy trick counts before and after each card of one
+/// play trace — see [`Solver::analyse_play`].
+///
+/// Runs on the dedicated large-stack pool even for one trace (the deep
+/// alpha-beta search overflows small caller stacks). For many traces at
+/// once, prefer [`analyse_plays`].
+///
+/// # Panics
+///
+/// When a trace card is illegal; use [`Solver::try_analyse_play`] for a
+/// fallible variant.
+#[must_use]
+pub fn analyse_play(trace: &PlayTrace) -> PlayAnalysis {
+    analyse_plays(std::slice::from_ref(trace))
+        .pop()
+        .expect("one analysis per trace")
+}
+
+/// Analyse a batch of play traces in parallel, one work unit per trace.
+///
+/// Traces may mix trumps, leaders, and lengths freely; notrump traces
+/// are dispatched first (the tail-risky strain). Order of results
+/// matches the order of `traces`. Each pool worker keeps a warm
+/// [`Solver`] across calls, shared with the other batch entry points.
+/// (The FFI reference analyses traces serially; this fans out.)
+///
+/// # Panics
+///
+/// When any trace card is illegal; use [`Solver::try_analyse_play`] for
+/// a fallible variant.
+#[must_use]
+pub fn analyse_plays(traces: &[PlayTrace]) -> Vec<PlayAnalysis> {
+    use rayon::iter::ParallelIterator;
+    use rayon::slice::ParallelSlice;
+
+    let mut tasks: Vec<usize> = (0..traces.len()).collect();
+    tasks.sort_by_key(|&i| core::cmp::Reverse(traces[i].board.trump() == Strain::Notrump));
+
+    let pool = solver_pool();
+    let target_chunks = pool.current_num_threads().saturating_mul(8).max(1);
+    let chunk_size = tasks.len().div_ceil(target_chunks).max(1);
+
+    let collected: Vec<Vec<(usize, PlayAnalysis)>> = pool.install(|| {
+        tasks
+            .par_chunks(chunk_size)
+            .map(|chunk| {
+                with_worker_solver(
+                    crate::tt::DEFAULT_MEMORY_MB,
+                    crate::tt::MAX_MEMORY_MB,
+                    |solver| {
+                        chunk
+                            .iter()
+                            .map(|&i| (i, solver.analyse_play(&traces[i])))
+                            .collect()
+                    },
+                )
+            })
+            .collect()
+    });
+
+    let mut results: Vec<Option<PlayAnalysis>> = vec![None; traces.len()];
+    for (i, analysis) in collected.into_iter().flatten() {
+        results[i] = Some(analysis);
+    }
+    results
+        .into_iter()
+        .map(|a| a.expect("every trace analysed"))
+        .collect()
 }
 
 // ---------------------------------------------------------------------

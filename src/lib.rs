@@ -20,6 +20,7 @@
     clippy::unused_self
 )]
 
+pub(crate) mod analyse;
 pub mod board;
 pub(crate) mod convert;
 pub(crate) mod dealer_par;
@@ -44,11 +45,11 @@ pub use board::{
 };
 pub use contract_bridge::FullDeal;
 pub use par::{Par, ParContract, calculate_par, calculate_pars};
-pub use play::{FoundPlays, Play};
+pub use play::{FoundPlays, Play, PlayAnalysis, PlayFaultError, PlayFaultKind, PlayTrace};
 pub use search::SearchStats;
 pub use solver::{
-    Solver, solve_board, solve_boards, solve_boards_with_memory, solve_deal, solve_deal_on,
-    solve_deals, solve_deals_with_memory,
+    Solver, analyse_play, analyse_plays, solve_board, solve_boards, solve_boards_with_memory,
+    solve_deal, solve_deal_on, solve_deals, solve_deals_with_memory,
 };
 pub use strain_flags::{NonEmptyStrainFlags, StrainFlags};
 pub use tricks::{InvalidTrickCount, TrickCount, TrickCountRow, TrickCountTable};
