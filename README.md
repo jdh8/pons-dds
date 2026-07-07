@@ -12,7 +12,7 @@ No C++ compiler required — compiles anywhere Rust runs.
 
 ```toml
 [dependencies]
-pons-dds = "0.1"
+pons-dds = "0.2"
 ```
 
 ```rust
@@ -23,7 +23,7 @@ use pons_dds::{solve_deal, solve_deals};
 let deal: FullDeal = "N:AKQJT98765432... .AKQJT98765432.. \
                       ..AKQJT98765432. ...AKQJT98765432".parse().unwrap();
 let table = solve_deal(deal);
-assert_eq!(table.get(Strain::Spades, Seat::North), 13);
+assert_eq!(table[Strain::Spades].get(Seat::North).get(), 13);
 
 // Solve many deals in parallel — preferred for batch workloads.
 let deals = [deal, deal];

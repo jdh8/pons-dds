@@ -28,7 +28,7 @@ fn assert_tables_match(
     for strain in Strain::ASC {
         for seat in Seat::ALL {
             assert_eq!(
-                pons.get(strain, seat),
+                pons[strain].get(seat).get(),
                 u8::from(ddss[strain].get(seat)),
                 "pons-dds disagrees with ddss at {strain:?} declared by {seat:?}\ndeal: {deal}",
             );

@@ -17,6 +17,7 @@ use crate::convert::dds_suit_from_cb;
 use crate::pos::Pos;
 use crate::quick_tricks::{MAXNODE, MINNODE};
 use crate::search::Engine;
+use crate::tricks::{TrickCountRow, TrickCountTable};
 use crate::tt::TransTable;
 use contract_bridge::{FullDeal, Seat, Strain, Suit};
 use std::sync::OnceLock;
@@ -55,36 +56,6 @@ fn pos_from_deal(deal: &FullDeal) -> Pos {
         }
     }
     pos
-}
-
-// ---------------------------------------------------------------------
-// Result table
-// ---------------------------------------------------------------------
-
-/// Double-dummy result table: tricks each seat takes as declarer at
-/// each strain.
-///
-/// Indexed by `(strain, seat)`. The storage is a flat `[[u8; 4]; 5]`
-/// where the first axis is the strain in ascending order — Clubs,
-/// Diamonds, Hearts, Spades, Notrump (matching [`Strain`]'s enum integer
-/// values) — and the second is the seat in dealing order — North, East,
-/// South, West (matching [`Seat`]).
-///
-/// Each entry is in `0..=13`. A later release may upgrade this to a
-/// validated newtype that mirrors `ddss::tricks::TrickCountTable`.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct TrickCountTable {
-    /// Per-`(strain, seat)` trick count, in `0..=13`.
-    pub tricks: [[u8; 4]; 5],
-}
-
-impl TrickCountTable {
-    /// Return the number of tricks `seat` makes as declarer in `strain`.
-    #[inline]
-    #[must_use]
-    pub const fn get(&self, strain: Strain, seat: Seat) -> u8 {
-        self.tricks[strain as usize][seat as usize]
-    }
 }
 
 // ---------------------------------------------------------------------
@@ -160,8 +131,7 @@ impl Solver {
     }
 
     /// Solve the configured strain (all 4 declarers) of `deal`, returning
-    /// the per-seat trick row in seat order (North, East, South,
-    /// West).
+    /// the per-seat trick row.
     ///
     /// Resets the transposition table for the strain's trump, then reuses
     /// it across the 4 declarer searches: the bounds are framed relative
@@ -170,7 +140,7 @@ impl Solver {
     /// grain of parallelism in [`solve_deals`]; keeping the 4 declarers
     /// on one unit preserves that intra-strain TT reuse.
     #[must_use]
-    pub fn solve(&mut self, deal: FullDeal) -> [u8; 4] {
+    pub fn solve(&mut self, deal: FullDeal) -> TrickCountRow {
         // 13 tricks left → ini_depth = 48. The leader of trick 13 (the
         // opening lead) plays at depth `ini_depth`, then each follower
         // decrements depth by 1.
@@ -230,7 +200,7 @@ impl Solver {
             debug_assert!((0..=13).contains(&tricks), "tricks out of range");
             row[seat_idx] = tricks as u8;
         }
-        row
+        TrickCountRow::new(row[0], row[1], row[2], row[3])
     }
 }
 
@@ -373,7 +343,7 @@ fn solve_deals_pooled(deals: &[FullDeal], default_mb: u32, max_mb: u32) -> Vec<T
     let target_chunks = pool.current_num_threads().saturating_mul(8).max(1);
     let chunk_size = tasks.len().div_ceil(target_chunks).max(1);
 
-    let collected: Vec<Vec<(usize, usize, [u8; 4])>> = pool.install(|| {
+    let collected: Vec<Vec<(usize, usize, TrickCountRow)>> = pool.install(|| {
         tasks
             .par_chunks(chunk_size)
             .map(|chunk| {
@@ -408,7 +378,7 @@ fn solve_deals_pooled(deals: &[FullDeal], default_mb: u32, max_mb: u32) -> Vec<T
     // Scatter results back via each task's (deal, strain) pair.
     let mut tables = vec![TrickCountTable::default(); deals.len()];
     for (d, s, row) in collected.into_iter().flatten() {
-        tables[d].tricks[s] = row;
+        tables[d].0[s] = row;
     }
     tables
 }
@@ -492,7 +462,7 @@ pub fn solve_deal_on(solver: &mut Solver, deal: FullDeal) -> TrickCountTable {
     let mut table = TrickCountTable::default();
     for (i, strain) in STRAINS.iter().enumerate() {
         solver.set_strain(*strain);
-        table.tricks[i] = solver.solve(deal);
+        table.0[i] = solver.solve(deal);
     }
     table
 }
@@ -600,7 +570,7 @@ mod tests {
         // Notrump row: declarer always makes 0.
         for seat in Seat::ALL {
             assert_eq!(
-                table.get(Strain::Notrump, seat),
+                table[Strain::Notrump].get(seat).get(),
                 0,
                 "declarer {seat} at NT should make 0 tricks (LHO runs their suit)"
             );
@@ -645,10 +615,11 @@ mod tests {
             (Strain::Clubs, 0, 13),    // W owns clubs → EW wins
         ];
         for (strain, ns, ew) in cases {
-            assert_eq!(table.get(strain, Seat::North), ns, "N declaring {strain}");
-            assert_eq!(table.get(strain, Seat::South), ns, "S declaring {strain}");
-            assert_eq!(table.get(strain, Seat::East), ew, "E declaring {strain}");
-            assert_eq!(table.get(strain, Seat::West), ew, "W declaring {strain}");
+            let row = table[strain];
+            assert_eq!(row.get(Seat::North).get(), ns, "N declaring {strain}");
+            assert_eq!(row.get(Seat::South).get(), ns, "S declaring {strain}");
+            assert_eq!(row.get(Seat::East).get(), ew, "E declaring {strain}");
+            assert_eq!(row.get(Seat::West).get(), ew, "W declaring {strain}");
         }
     }
 
@@ -701,15 +672,13 @@ mod tests {
 
         // Reference rows in (N, E, S, W) order — verified against
         // ddss::Solver::lock().solve_deal(deal).
-        let expected = TrickCountTable {
-            tricks: [
-                [8, 5, 8, 5], // ♣
-                [8, 5, 8, 5], // ♦
-                [6, 5, 6, 6], // ♥
-                [4, 9, 4, 9], // ♠
-                [5, 8, 5, 8], // NT
-            ],
-        };
+        let expected = TrickCountTable([
+            TrickCountRow::new(8, 5, 8, 5), // ♣
+            TrickCountRow::new(8, 5, 8, 5), // ♦
+            TrickCountRow::new(6, 5, 6, 6), // ♥
+            TrickCountRow::new(4, 9, 4, 9), // ♠
+            TrickCountRow::new(5, 8, 5, 8), // NT
+        ]);
 
         assert_eq!(got, expected, "DD table mismatch for reference deal");
     }

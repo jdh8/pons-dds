@@ -29,10 +29,10 @@ pub(crate) mod pos;
 pub(crate) mod quick_tricks;
 pub(crate) mod search;
 pub mod solver;
+pub mod tricks;
 pub(crate) mod tt;
 
 pub use contract_bridge::FullDeal;
 pub use search::SearchStats;
-pub use solver::{
-    Solver, TrickCountTable, solve_deal, solve_deal_on, solve_deals, solve_deals_with_memory,
-};
+pub use solver::{Solver, solve_deal, solve_deal_on, solve_deals, solve_deals_with_memory};
+pub use tricks::{InvalidTrickCount, TrickCount, TrickCountRow, TrickCountTable};

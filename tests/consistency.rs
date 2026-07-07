@@ -18,8 +18,8 @@ fn deals() -> Vec<FullDeal> {
     (0..N).map(|_| full_deal(&mut rng)).collect()
 }
 
-fn solve_deal_sequential(deal: FullDeal) -> [[u8; 4]; 5] {
-    pons_dds::solve_deal_on(&mut pons_dds::Solver::new(Strain::Notrump), deal).tricks
+fn solve_deal_sequential(deal: FullDeal) -> pons_dds::TrickCountTable {
+    pons_dds::solve_deal_on(&mut pons_dds::Solver::new(Strain::Notrump), deal)
 }
 
 /// The rayon batch must produce the same answers as repeated
@@ -31,7 +31,7 @@ fn solve_deals_matches_single() {
     let batch = pons_dds::solve_deals(&deals);
     for (i, &d) in deals.iter().enumerate() {
         assert_eq!(
-            batch[i].tricks,
+            batch[i],
             solve_deal_sequential(d),
             "batch vs single mismatch on deal #{i}: {d}",
         );
@@ -63,9 +63,6 @@ fn solve_deals_safe_on_small_stack() {
     let reference = pons_dds::solve_deals(&deals);
     assert_eq!(on_small_stack.len(), reference.len());
     for (i, (a, b)) in on_small_stack.iter().zip(&reference).enumerate() {
-        assert_eq!(
-            a.tricks, b.tricks,
-            "small-stack vs normal mismatch on deal #{i}"
-        );
+        assert_eq!(a, b, "small-stack vs normal mismatch on deal #{i}");
     }
 }
