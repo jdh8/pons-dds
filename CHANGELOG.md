@@ -6,6 +6,8 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-08
+
 ### Added
 
 API parity with the FFI `ddss` reference crate — every solving feature it
