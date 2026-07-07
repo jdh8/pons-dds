@@ -22,6 +22,7 @@
 
 pub mod board;
 pub(crate) mod convert;
+pub(crate) mod dealer_par;
 pub(crate) mod later_tricks;
 pub(crate) mod lookup;
 pub(crate) mod move_type;
