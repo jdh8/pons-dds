@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1783321145903,
+  "lastUpdate": 1783425477973,
   "repoUrl": "https://github.com/jdh8/pons-dds",
   "entries": {
     "Benchmark": [
@@ -671,6 +671,66 @@ window.BENCHMARK_DATA = {
             "name": "solve_deals/200",
             "value": 21476058536,
             "range": "± 825753290",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "committer": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "distinct": true,
+          "id": "234c0f6ca9bae017c901a5cd784cadd3334d236e",
+          "message": "docs: cover the new features in benches, README, and CHANGELOG\n\nAdd the solve_boards/{32,200} and analyse_plays_32 bench cases,\nmirroring the dds-bridge crate's layout for the gh-pages dashboard, and\ndrop the note about them being omitted. The README gains usage examples\nfor solve_board, analyse_play, and calculate_par plus a ddss→pons-dds\nmigration table in the Scope section; the CHANGELOG records the new API\nsurface, the two breaking changes, and the documented divergences from\nthe FFI reference.\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>",
+          "timestamp": "2026-07-07T19:47:09+08:00",
+          "tree_id": "12621ed8538db3dd5d0125975c405959ea6c4cc6",
+          "url": "https://github.com/jdh8/pons-dds/commit/234c0f6ca9bae017c901a5cd784cadd3334d236e"
+        },
+        "date": 1783425477149,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "solve_deal",
+            "value": 78722795,
+            "range": "± 168945408",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/32",
+            "value": 2807166110,
+            "range": "± 56819344",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/200",
+            "value": 20721271356,
+            "range": "± 727223808",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_boards/32",
+            "value": 298712022,
+            "range": "± 2348208",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_boards/200",
+            "value": 1559981522,
+            "range": "± 31417322",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "analyse_plays_32",
+            "value": 292547881,
+            "range": "± 4507376",
             "unit": "ns/iter"
           }
         ]
