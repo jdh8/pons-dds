@@ -27,6 +27,7 @@ pub(crate) mod later_tricks;
 pub(crate) mod lookup;
 pub(crate) mod move_type;
 pub(crate) mod moves;
+pub mod par;
 pub mod play;
 pub(crate) mod pos;
 pub(crate) mod quick_tricks;
@@ -42,6 +43,7 @@ pub use board::{
     Board, BoardError, CurrentTrick, CurrentTrickError, Objective, RevokePosition, Target,
 };
 pub use contract_bridge::FullDeal;
+pub use par::{Par, ParContract, calculate_par, calculate_pars};
 pub use play::{FoundPlays, Play};
 pub use search::SearchStats;
 pub use solver::{

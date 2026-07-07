@@ -17,8 +17,6 @@
 //! byte arrays — never `String` — so the downstream parse is byte-for-byte
 //! identical, quirks included.
 
-#![allow(dead_code)] // TODO(par): consumed by `src/par.rs` in the next commit.
-
 /// Number of strains (`#define DDS_STRAINS 5`).
 const DDS_STRAINS: usize = 5;
 
