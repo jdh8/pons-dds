@@ -20,11 +20,13 @@
     clippy::unused_self
 )]
 
+pub mod board;
 pub(crate) mod convert;
 pub(crate) mod later_tricks;
 pub(crate) mod lookup;
 pub(crate) mod move_type;
 pub(crate) mod moves;
+pub mod play;
 pub(crate) mod pos;
 pub(crate) mod quick_tricks;
 pub(crate) mod search;
@@ -34,7 +36,11 @@ pub mod tricks;
 pub(crate) mod tt;
 pub mod vulnerability;
 
+pub use board::{
+    Board, BoardError, CurrentTrick, CurrentTrickError, Objective, RevokePosition, Target,
+};
 pub use contract_bridge::FullDeal;
+pub use play::{FoundPlays, Play};
 pub use search::SearchStats;
 pub use solver::{Solver, solve_deal, solve_deal_on, solve_deals, solve_deals_with_memory};
 pub use strain_flags::{NonEmptyStrainFlags, StrainFlags};
