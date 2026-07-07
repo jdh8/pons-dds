@@ -19,6 +19,19 @@ pub const fn dds_suit_from_cb(suit: Suit) -> usize {
     3 - suit as usize
 }
 
+/// Convert a DDS internal suit index (S=0..C=3) back to a
+/// `contract_bridge::Suit`. Inverse of [`dds_suit_from_cb`] (the
+/// mapping is an involution).
+#[inline]
+pub const fn cb_suit_from_dds(suit: i32) -> Suit {
+    match suit {
+        0 => Suit::Spades,
+        1 => Suit::Hearts,
+        2 => Suit::Diamonds,
+        _ => Suit::Clubs,
+    }
+}
+
 /// Convert a `contract_bridge::Strain` to the DDS trump constant.
 /// Notrump maps to [`DDS_NOTRUMP`] (= 4); suit strains follow the same
 /// descending order as [`dds_suit_from_cb`].

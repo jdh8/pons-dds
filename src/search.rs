@@ -1144,7 +1144,6 @@ impl Engine {
 
     /// The cutoff move recorded at `depth` by the last successful
     /// probe. Only meaningful right after a probe returned `true`.
-    #[allow(dead_code)] // ponytail: consumed by the solve_board driver
     pub(crate) const fn best_move_at(&self, depth: i32) -> MoveType {
         self.best_move[depth as usize]
     }
@@ -1152,16 +1151,31 @@ impl Engine {
     /// Install the root forbidden-move list consulted by `purge` at
     /// `ini_depth`. `moves[0]` is skipped (vendor convention); a rank
     /// of 0 is the "no move" sentinel.
-    #[allow(dead_code)] // ponytail: consumed by the solve_board driver
     pub(crate) const fn set_forbidden_moves(&mut self, moves: &[MoveType; 14]) {
         self.forbidden_moves = *moves;
     }
 
     /// Clear the root forbidden-move list (vendor resets it on both
     /// entry and exit of `SolveBoardInternal`).
-    #[allow(dead_code)] // ponytail: consumed by the solve_board driver
     pub(crate) fn clear_forbidden_moves(&mut self) {
         self.forbidden_moves = [MoveType::default(); 14];
+    }
+
+    /// Generate the root move list for `(trick, hand_rel_first)` —
+    /// the driver's setup movegen (vendor SolverIF.cpp:292-313). Uses
+    /// the current `best_move`/`best_move_tt` hints at `ini_depth`;
+    /// call [`Engine::reset_best_moves`] first for a deterministic
+    /// fresh-weight order.
+    pub(crate) fn gen_root_moves(&mut self, pos: &Pos, trick: i32, hand_rel_first: i32) {
+        if hand_rel_first == 0 {
+            let depth_u = self.ini_depth as usize;
+            let bm = self.best_move[depth_u];
+            let bmtt = self.best_move_tt[depth_u];
+            self.moves
+                .move_gen_0(trick, pos, &bm, &bmtt, self.rel.as_ref());
+        } else {
+            self.moves.move_gen_123(trick, hand_rel_first, pos);
+        }
     }
 
     /// One root alpha-beta probe from a (possibly mid-trick) root,
@@ -1180,7 +1194,6 @@ impl Engine {
     /// Callers must have set `self.ini_depth = ini_depth`, prepared the
     /// moves track for the root trick (removed ranks, lead hand, replayed
     /// table cards), and reset the best-move arrays before each probe.
-    #[allow(dead_code)] // ponytail: consumed by the solve_board driver
     pub(crate) fn root_probe(
         &mut self,
         pos: &mut Pos,

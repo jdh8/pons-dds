@@ -30,6 +30,7 @@ pub mod play;
 pub(crate) mod pos;
 pub(crate) mod quick_tricks;
 pub(crate) mod search;
+pub(crate) mod solve_board;
 pub mod solver;
 pub mod strain_flags;
 pub mod tricks;
@@ -42,7 +43,10 @@ pub use board::{
 pub use contract_bridge::FullDeal;
 pub use play::{FoundPlays, Play};
 pub use search::SearchStats;
-pub use solver::{Solver, solve_deal, solve_deal_on, solve_deals, solve_deals_with_memory};
+pub use solver::{
+    Solver, solve_board, solve_boards, solve_boards_with_memory, solve_deal, solve_deal_on,
+    solve_deals, solve_deals_with_memory,
+};
 pub use strain_flags::{NonEmptyStrainFlags, StrainFlags};
 pub use tricks::{InvalidTrickCount, TrickCount, TrickCountRow, TrickCountTable};
 pub use vulnerability::{ParseVulnerabilityError, Vulnerability};

@@ -13,7 +13,9 @@
 //! 4 declarers of that strain for a deal — handy for deterministic
 //! profiling or driving the solve yourself.
 
+use crate::board::Objective;
 use crate::convert::dds_suit_from_cb;
+use crate::play::FoundPlays;
 use crate::pos::Pos;
 use crate::quick_tricks::{MAXNODE, MINNODE};
 use crate::search::Engine;
@@ -203,6 +205,26 @@ impl Solver {
         }
         TrickCountRow::new(row[0], row[1], row[2], row[3])
     }
+
+    /// Solve one board on this solver: per-card double-dummy answers
+    /// for the player on lead, per the objective's [`Target`].
+    ///
+    /// Retargets the solver to the board's trump and rebuilds the
+    /// transposition table for the board's remaining cards, so it can
+    /// be freely interleaved with [`Solver::solve`] calls. Deterministic
+    /// and single-threaded; for parallel batches use the free
+    /// [`solve_boards`].
+    ///
+    /// [`Target`]: crate::board::Target
+    #[must_use]
+    pub fn solve_board(&mut self, objective: &Objective) -> FoundPlays {
+        self.set_strain(objective.board.trump());
+        // The driver rebuilds the TT and per-deal tables for the
+        // board's remaining cards; drop the full-deal fingerprint so a
+        // later `solve` rebuilds its own.
+        self.deal_key = None;
+        crate::solve_board::solve_board_on(&mut self.engine, &mut self.tt, objective)
+    }
 }
 
 impl Solver {
@@ -309,6 +331,37 @@ const fn dispatch_first(strain_idx: usize) -> bool {
     matches!(STRAINS[strain_idx], Strain::Notrump)
 }
 
+// Per-worker solver, parked in thread-local storage so it stays off the
+// deep search stack and warms across calls. The budget rides alongside it
+// so a worker rebuilds its table only when the budget changes.
+thread_local! {
+    static WORKER_SOLVER: std::cell::RefCell<Option<(u32, u32, Solver)>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Run `f` on the calling pool worker's persistent [`Solver`], creating
+/// or rebuilding it when the requested memory budget changed.
+fn with_worker_solver<R>(default_mb: u32, max_mb: u32, f: impl FnOnce(&mut Solver) -> R) -> R {
+    WORKER_SOLVER.with(|cell| {
+        let mut slot = cell.borrow_mut();
+        // Rebuild only when the requested budget changed.
+        if !matches!(slot.as_ref(), Some(&(d_mb, m_mb, _)) if d_mb == default_mb && m_mb == max_mb)
+        {
+            *slot = None;
+        }
+        let solver = &mut slot
+            .get_or_insert_with(|| {
+                (
+                    default_mb,
+                    max_mb,
+                    Solver::with_memory(Strain::Notrump, default_mb, max_mb),
+                )
+            })
+            .2;
+        f(solver)
+    })
+}
+
 /// Drive `deals` through `solver_pool` with an explicit per-thread
 /// transposition-table budget, returning one [`TrickCountTable`] per deal.
 /// Only the strains in `flags` are solved; the other rows stay zero-filled.
@@ -329,14 +382,6 @@ fn solve_deals_pooled(
 ) -> Vec<TrickCountTable> {
     use rayon::iter::ParallelIterator;
     use rayon::slice::ParallelSlice;
-    use std::cell::RefCell;
-
-    // Per-worker solver, parked in thread-local storage so it stays off the
-    // deep search stack and warms across calls. The budget rides alongside it
-    // so a worker rebuilds its table only when the budget changes.
-    thread_local! {
-        static SOLVER: RefCell<Option<(u32, u32, Solver)>> = const { RefCell::new(None) };
-    }
 
     let mut tasks: Vec<(usize, usize)> = (0..deals.len())
         .flat_map(|d| (0..STRAINS.len()).map(move |s| (d, s)))
@@ -355,23 +400,7 @@ fn solve_deals_pooled(
         tasks
             .par_chunks(chunk_size)
             .map(|chunk| {
-                SOLVER.with(|cell| {
-                    let mut slot = cell.borrow_mut();
-                    // Rebuild only when the requested budget changed.
-                    if !matches!(slot.as_ref(), Some(&(d_mb, m_mb, _)) if d_mb == default_mb && m_mb == max_mb)
-                    {
-                        *slot = None;
-                    }
-                    let solver = &mut slot
-                        .get_or_insert_with(|| {
-                            (
-                                default_mb,
-                                max_mb,
-                                Solver::with_memory(Strain::Notrump, default_mb, max_mb),
-                            )
-                        })
-                        .2;
-
+                with_worker_solver(default_mb, max_mb, |solver| {
                     let mut rows = Vec::with_capacity(chunk.len());
                     for &(d, s) in chunk {
                         solver.set_strain(STRAINS[s]);
@@ -389,6 +418,41 @@ fn solve_deals_pooled(
         tables[d].0[s] = row;
     }
     tables
+}
+
+/// Drive `objectives` through `solver_pool`: one board per work unit,
+/// notrump boards dispatched first (the tail-risky strain, as in
+/// [`solve_deals`]), results scattered back in input order.
+fn solve_boards_pooled(objectives: &[Objective], default_mb: u32, max_mb: u32) -> Vec<FoundPlays> {
+    use rayon::iter::ParallelIterator;
+    use rayon::slice::ParallelSlice;
+
+    let mut tasks: Vec<usize> = (0..objectives.len()).collect();
+    tasks.sort_by_key(|&i| core::cmp::Reverse(objectives[i].board.trump() == Strain::Notrump));
+
+    let pool = solver_pool();
+    let target_chunks = pool.current_num_threads().saturating_mul(8).max(1);
+    let chunk_size = tasks.len().div_ceil(target_chunks).max(1);
+
+    let collected: Vec<Vec<(usize, FoundPlays)>> = pool.install(|| {
+        tasks
+            .par_chunks(chunk_size)
+            .map(|chunk| {
+                with_worker_solver(default_mb, max_mb, |solver| {
+                    chunk
+                        .iter()
+                        .map(|&i| (i, solver.solve_board(&objectives[i])))
+                        .collect()
+                })
+            })
+            .collect()
+    });
+
+    let mut results = vec![FoundPlays::default(); objectives.len()];
+    for (i, found) in collected.into_iter().flatten() {
+        results[i] = found;
+    }
+    results
 }
 
 /// Solve a batch of deals in parallel, restricted to the strains in `flags`.
@@ -479,6 +543,47 @@ pub fn solve_deal_on(solver: &mut Solver, deal: FullDeal) -> TrickCountTable {
         table.0[i] = solver.solve(deal);
     }
     table
+}
+
+/// Solve a single board — per-card double-dummy answers for the player
+/// on lead, per the objective's [`Target`](crate::board::Target).
+///
+/// Runs on the dedicated large-stack pool even for one board (the deep
+/// alpha-beta search overflows small caller stacks). For many boards at
+/// once, prefer [`solve_boards`]; for deterministic single-thread use,
+/// drive [`Solver::solve_board`] yourself.
+#[must_use]
+pub fn solve_board(objective: &Objective) -> FoundPlays {
+    solve_boards(std::slice::from_ref(objective))
+        .pop()
+        .unwrap_or_default()
+}
+
+/// Solve a batch of boards in parallel, one work unit per board.
+///
+/// Boards may mix trumps, leaders, and targets freely; notrump boards
+/// are dispatched first (the tail-risky strain). Order of results
+/// matches the order of `objectives`. Each pool worker keeps a warm
+/// [`Solver`] across calls, shared with [`solve_deals`].
+#[must_use]
+pub fn solve_boards(objectives: &[Objective]) -> Vec<FoundPlays> {
+    solve_boards_pooled(
+        objectives,
+        crate::tt::DEFAULT_MEMORY_MB,
+        crate::tt::MAX_MEMORY_MB,
+    )
+}
+
+/// [`solve_boards`] with an explicit per-thread transposition-table
+/// memory budget, in MiB — see [`solve_deals_with_memory`] for the
+/// budget semantics.
+#[must_use]
+pub fn solve_boards_with_memory(
+    objectives: &[Objective],
+    default_mb: u32,
+    max_mb: u32,
+) -> Vec<FoundPlays> {
+    solve_boards_pooled(objectives, default_mb, max_mb)
 }
 
 // ---------------------------------------------------------------------
