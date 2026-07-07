@@ -6,6 +6,69 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+### Added
+
+API parity with the FFI `ddss` reference crate — every solving feature it
+exposes now has a pure-Rust equivalent, oracle-tested against DDS 2.9:
+
+- **`solve_board` / `solve_boards`** (+ `solve_boards_with_memory`,
+  `Solver::solve_board`): per-card double-dummy solving from arbitrary,
+  possibly mid-trick positions. New types `Board`, `CurrentTrick`,
+  `Target` (any/all/legal-plays), `Objective`, `Play` (with
+  sequence-equals), and `FoundPlays`. Scores, cards, equals masks, and
+  output order match `SolveBoard` bit-for-bit (mode 1; see divergences).
+- **`analyse_play` / `analyse_plays`** (+ `Solver::analyse_play`,
+  `Solver::try_analyse_play`): double-dummy trick counts before and after
+  each card of a play trace, with new types `PlayTrace`, `PlayAnalysis`,
+  and `PlayFaultError`. The batch entry fans traces across the solver
+  pool (the FFI reference analyses serially).
+- **`calculate_par` / `calculate_pars`**: par scores and contracts from a
+  DD table, vulnerability, and (for the dealer-relative variant) dealer.
+  New types `Par`, `ParContract`, and `Vulnerability`; statement-for-
+  statement ports of the vendor's `DealerParBin`/`SidesParBin` paths,
+  text-parse quirks included, matching `ddss` byte-for-byte.
+- **Strain-filtered batch solving**: `solve_deals` /
+  `solve_deals_with_memory` take `NonEmptyStrainFlags` (new, with
+  `StrainFlags`) restricting which strains are solved; rows of
+  unrequested strains are zero-filled, matching the FFI crate's
+  observable behavior (now documented).
+- Hex and GIB hand-record views on the trick-count types.
+
+### Changed
+
+- **Breaking:** `TrickCountTable` is now the validated newtype stack from
+  the `ddss` crate — `TrickCount` (0..=13), bit-packed `TrickCountRow`,
+  and `TrickCountTable` indexed by `Strain` with per-seat access by
+  `Seat` — replacing the plain `pub tricks: [[u8; 4]; 5]` struct.
+  `Solver::solve` returns a `TrickCountRow` instead of `[u8; 4]`.
+- **Breaking:** `solve_deals` and `solve_deals_with_memory` take a
+  `NonEmptyStrainFlags` argument; pass `NonEmptyStrainFlags::ALL` for the
+  previous behavior.
+
+### Divergences from the FFI `ddss` crate
+
+All deliberate, all on the safe side, all oracle-tested around:
+
+- `solve_board` implements DDS **mode-1** semantics: a forced single card
+  gets a real score, never the unevaluated `-2` sentinel that `ddss`'s
+  own decoder cannot represent (its `solve_board` panics on forced-card
+  boards).
+- `analyse_play` returns the documented full `cards.len() + 1` trick
+  counts; DDS never analyses the final trick and mis-counts entries on
+  mid-trick snapshots (to the point that `ddss` can panic on short
+  traces there).
+- `analyse_play` detects revokes as errors; DDS silently scores the
+  off-suit card as a discard and produces a wrong analysis.
+- Empty boards and targets above the remaining tricks yield empty
+  results instead of error-code panics.
+- `Target::Any(Some(0))`/`All(Some(0))` list moves in a deterministic
+  fresh-weight order; DDS's order depends on stale best-move state from
+  earlier solves on its thread.
+- The `nodes` counter of `FoundPlays` is approximate (probe schedules
+  differ).
+- `system_info` and `Solver::lock`/`try_lock` have no equivalent — the
+  pure-Rust solver needs no global lock; construct `Solver`s freely.
+
 ### Performance
 
 A solver-wide optimization pass closing most of the gap to the DDS 2.9 C++

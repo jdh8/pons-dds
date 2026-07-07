@@ -32,6 +32,29 @@ let tables = solve_deals(&deals, NonEmptyStrainFlags::ALL);
 assert_eq!(tables.len(), 2);
 ```
 
+Beyond DD tables, the full DDS feature set is available:
+
+```rust
+use contract_bridge::{Seat, Strain};
+use pons_dds::{
+    Board, CurrentTrick, Objective, PlayTrace, Target,
+    Vulnerability, analyse_play, calculate_par, solve_board, solve_deal,
+};
+# let deal: contract_bridge::FullDeal = "N:AKQJT98765432... .AKQJT98765432.. ..AKQJT98765432. ...AKQJT98765432".parse().unwrap();
+
+// Per-card solving from any (even mid-trick) position.
+let board = Board::try_new(deal.into(), CurrentTrick::new(Strain::Notrump, Seat::East))?;
+let plays = solve_board(&Objective { board: board.clone(), target: Target::Legal });
+
+// Double-dummy trick counts along a play trace.
+let analysis = analyse_play(&PlayTrace { board, cards: Default::default() });
+
+// Par score and contracts from a DD table.
+let par = calculate_par(solve_deal(deal), Vulnerability::NONE, Seat::North);
+assert_eq!(par.score, 1510); // NS bid and make 7♠ — nonvul grand slam
+# Ok::<(), pons_dds::BoardError>(())
+```
+
 For sequential or diagnostic use, drive `Solver` directly:
 
 ```rust
@@ -45,13 +68,24 @@ let table = solve_deal_on(&mut solver, deal);
 
 ## Scope
 
-This release ships the `Solver` API: a per-strain solver that produces one
-strain's row of a `TrickCountTable` for a `FullDeal`, plus the rayon-parallel
-`solve_deal` (single-deal) and `solve_deals` (batch) helpers that assemble the
-full 5 × 4 table, and the sequential single-thread `solve_deal_on` for
-deterministic profiling. The internal substrate (position state, move
-generator, search engine, transposition table, and friends) remains
-crate-private.
+Full API parity with the FFI [`ddss`][ddss-rs] reference crate, pure Rust:
+
+| `ddss` (FFI)                        | pons-dds                                    |
+|-------------------------------------|---------------------------------------------|
+| `Solver::solve_deal`                | `solve_deal` / `solve_deal_on`              |
+| `Solver::solve_deals(deals, flags)` | `solve_deals(deals, flags)`                 |
+| `Solver::solve_board(s)`            | `solve_board` / `solve_boards`              |
+| `Solver::analyse_play(s)`           | `analyse_play` / `analyse_plays`            |
+| `calculate_par` / `calculate_pars`  | `calculate_par` / `calculate_pars`          |
+| `Solver::lock` / `try_lock`         | not needed — construct `Solver`s freely     |
+| `system_info`                       | not applicable (no FFI library underneath)  |
+
+Every solver output is oracle-tested against DDS 2.9 (see
+`tests/compare_ddss*.rs`); the few deliberate divergences — all on the safe
+side, like scoring forced cards instead of DDS's `-2` sentinel and
+detecting revokes in play traces — are listed in the CHANGELOG. The
+internal substrate (position state, move generator, search engine,
+transposition table, and friends) remains crate-private.
 
 ## Performance
 
