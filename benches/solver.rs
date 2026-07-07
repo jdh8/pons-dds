@@ -13,7 +13,7 @@ use contract_bridge::deck::full_deal;
 use core::hint::black_box;
 use core::time::Duration;
 use criterion::{BatchSize, Criterion, Throughput, criterion_group, criterion_main};
-use pons_dds::{solve_deal, solve_deals};
+use pons_dds::{NonEmptyStrainFlags, solve_deal, solve_deals};
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 
@@ -50,7 +50,7 @@ fn bench_solve_deals(c: &mut Criterion) {
         let ds = deals(0, n);
         group.throughput(Throughput::Elements(n as u64));
         group.bench_function(n.to_string(), |b| {
-            b.iter(|| black_box(solve_deals(black_box(&ds))));
+            b.iter(|| black_box(solve_deals(black_box(&ds), NonEmptyStrainFlags::ALL)));
         });
     }
     group.finish();

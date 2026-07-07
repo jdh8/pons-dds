@@ -17,6 +17,7 @@ use crate::convert::dds_suit_from_cb;
 use crate::pos::Pos;
 use crate::quick_tricks::{MAXNODE, MINNODE};
 use crate::search::Engine;
+use crate::strain_flags::{NonEmptyStrainFlags, StrainFlags};
 use crate::tricks::{TrickCountRow, TrickCountTable};
 use crate::tt::TransTable;
 use contract_bridge::{FullDeal, Seat, Strain, Suit};
@@ -310,6 +311,7 @@ const fn dispatch_first(strain_idx: usize) -> bool {
 
 /// Drive `deals` through `solver_pool` with an explicit per-thread
 /// transposition-table budget, returning one [`TrickCountTable`] per deal.
+/// Only the strains in `flags` are solved; the other rows stay zero-filled.
 ///
 /// The work unit is one **(deal, strain)** pair — the 4 declarers of a
 /// strain stay together so the per-strain table warms across them. Tasks are
@@ -319,7 +321,12 @@ const fn dispatch_first(strain_idx: usize) -> bool {
 /// from a shallow rayon stack — in a plain loop within each chunk — and worker
 /// stack use does not grow with the batch. Work-stealing across the chunks
 /// balances the cores without a contended shared counter.
-fn solve_deals_pooled(deals: &[FullDeal], default_mb: u32, max_mb: u32) -> Vec<TrickCountTable> {
+fn solve_deals_pooled(
+    deals: &[FullDeal],
+    flags: StrainFlags,
+    default_mb: u32,
+    max_mb: u32,
+) -> Vec<TrickCountTable> {
     use rayon::iter::ParallelIterator;
     use rayon::slice::ParallelSlice;
     use std::cell::RefCell;
@@ -333,6 +340,7 @@ fn solve_deals_pooled(deals: &[FullDeal], default_mb: u32, max_mb: u32) -> Vec<T
 
     let mut tasks: Vec<(usize, usize)> = (0..deals.len())
         .flat_map(|d| (0..STRAINS.len()).map(move |s| (d, s)))
+        .filter(|&(_, s)| flags.contains(StrainFlags::from_strain(STRAINS[s])))
         .collect();
     // Stable: tail-risky strains first, deal order preserved within a rank.
     tasks.sort_by_key(|&(_, s)| core::cmp::Reverse(dispatch_first(s)));
@@ -383,13 +391,17 @@ fn solve_deals_pooled(deals: &[FullDeal], default_mb: u32, max_mb: u32) -> Vec<T
     tables
 }
 
-/// Solve a batch of deals in parallel.
+/// Solve a batch of deals in parallel, restricted to the strains in `flags`.
 ///
 /// The unit of work is a single **(deal, strain)** pair: a one-deal batch
-/// spreads its 5 strains across workers, and a large batch yields
-/// `5 × deals.len()` tasks for fine-grained load balancing. The 4 declarers
-/// of a strain stay on one task so the per-strain transposition table warms
-/// across them (see [`Solver::solve`]).
+/// spreads its strains across workers, and a large batch yields
+/// `popcount(flags) × deals.len()` tasks for fine-grained load balancing.
+/// The 4 declarers of a strain stay on one task so the per-strain
+/// transposition table warms across them (see [`Solver::solve`]).
+///
+/// Rows for strains **not** in `flags` are zero-filled and carry no
+/// information — the same observable behavior as the FFI `ddss` crate's
+/// filtered `solve_deals`.
 ///
 /// Solving runs on a dedicated, persistent thread pool whose workers each
 /// keep a warm [`Solver`] across calls; tasks are self-scheduled
@@ -398,9 +410,10 @@ fn solve_deals_pooled(deals: &[FullDeal], default_mb: u32, max_mb: u32) -> Vec<T
 /// This is the recommended entry point for solving many deals at once; for
 /// low-latency solving of a single deal see [`solve_deal`].
 #[must_use]
-pub fn solve_deals(deals: &[FullDeal]) -> Vec<TrickCountTable> {
+pub fn solve_deals(deals: &[FullDeal], flags: NonEmptyStrainFlags) -> Vec<TrickCountTable> {
     solve_deals_pooled(
         deals,
+        flags.get(),
         crate::tt::DEFAULT_MEMORY_MB,
         crate::tt::MAX_MEMORY_MB,
     )
@@ -425,10 +438,11 @@ pub fn solve_deals(deals: &[FullDeal]) -> Vec<TrickCountTable> {
 #[must_use]
 pub fn solve_deals_with_memory(
     deals: &[FullDeal],
+    flags: NonEmptyStrainFlags,
     default_mb: u32,
     max_mb: u32,
 ) -> Vec<TrickCountTable> {
-    solve_deals_pooled(deals, default_mb, max_mb)
+    solve_deals_pooled(deals, flags.get(), default_mb, max_mb)
 }
 
 /// Solve a single deal, spreading its 5 strains across rayon workers.
@@ -441,7 +455,7 @@ pub fn solve_deals_with_memory(
 /// internally threaded). For many deals at once, prefer [`solve_deals`].
 #[must_use]
 pub fn solve_deal(deal: FullDeal) -> TrickCountTable {
-    solve_deals(std::slice::from_ref(&deal))
+    solve_deals(std::slice::from_ref(&deal), NonEmptyStrainFlags::ALL)
         .pop()
         .unwrap_or_default()
 }
@@ -635,10 +649,32 @@ mod tests {
 
         let expected_a = solve_deal_sequential(deal_a);
 
-        let parallel = solve_deals(&deals);
+        let parallel = solve_deals(&deals, NonEmptyStrainFlags::ALL);
         assert_eq!(parallel.len(), 2);
         assert_eq!(parallel[0], expected_a);
         assert_eq!(parallel[1], expected_a);
+    }
+
+    /// A strain-filtered batch matches the full solve on the requested
+    /// strains and zero-fills the rest.
+    #[test]
+    fn solve_deals_strain_filter() {
+        let deal = each_hand_holds_one_suit_deal();
+        let deals = [deal];
+        let full = solve_deals(&deals, NonEmptyStrainFlags::ALL);
+
+        let flags = NonEmptyStrainFlags::new(StrainFlags::SPADES | StrainFlags::NOTRUMP)
+            .expect("non-empty flags");
+        let filtered = solve_deals(&deals, flags);
+
+        for strain in Strain::ASC {
+            let expected = if flags.get().contains(StrainFlags::from_strain(strain)) {
+                full[0][strain]
+            } else {
+                TrickCountRow::default()
+            };
+            assert_eq!(filtered[0][strain], expected, "row for {strain}");
+        }
     }
 
     /// The free `solve_deal` fans the 5 strains across rayon workers but

@@ -61,7 +61,12 @@ fn bench_solve_deals(c: &mut Criterion) {
         let ds = deals(0, n);
         group.throughput(Throughput::Elements(n as u64));
         group.bench_with_input(BenchmarkId::new("pons_dds", n), &ds, |b, ds| {
-            b.iter(|| black_box(pons_dds::solve_deals(black_box(ds))));
+            b.iter(|| {
+                black_box(pons_dds::solve_deals(
+                    black_box(ds),
+                    pons_dds::NonEmptyStrainFlags::ALL,
+                ))
+            });
         });
         group.bench_with_input(BenchmarkId::new("ddss", n), &ds, |b, ds| {
             b.iter(|| black_box(solver.solve_deals(black_box(ds), NonEmptyStrainFlags::ALL)));

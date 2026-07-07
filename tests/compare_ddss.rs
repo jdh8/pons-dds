@@ -40,7 +40,7 @@ fn assert_tables_match(
 /// batch entry points are parallel, so this stays fast even in a debug build.
 fn cross_check(n: usize) {
     let deals = deals(n);
-    let pons = pons_dds::solve_deals(&deals);
+    let pons = pons_dds::solve_deals(&deals, pons_dds::NonEmptyStrainFlags::ALL);
 
     // ddss::Solver holds a global reentrant lock and is `!Send`; acquire and
     // drop it on this thread. `solve_deals` parallelizes internally.
@@ -51,6 +51,36 @@ fn cross_check(n: usize) {
     assert_eq!(pons.len(), reference.len());
     for ((&p, &r), &deal) in pons.iter().zip(&reference).zip(&deals) {
         assert_tables_match(p, r, deal);
+    }
+}
+
+/// Strain-filtered batches must match ddss cell-for-cell **including the
+/// zero-filled rows of unrequested strains** — both crates document filtered
+/// rows as meaningless zeros, and this pins that parity.
+#[test]
+fn filtered_solve_deals_matches_ddss() {
+    let deals = deals(20);
+
+    let cases = [
+        ddss::StrainFlags::NOTRUMP,
+        ddss::StrainFlags::SPADES,
+        ddss::StrainFlags::HEARTS | ddss::StrainFlags::CLUBS,
+    ];
+    for flags in cases {
+        let pons_flags = pons_dds::NonEmptyStrainFlags::new(
+            pons_dds::StrainFlags::from_bits_truncate(flags.bits()),
+        )
+        .expect("non-empty");
+        let pons = pons_dds::solve_deals(&deals, pons_flags);
+
+        let solver = Solver::lock();
+        let reference =
+            solver.solve_deals(&deals, NonEmptyStrainFlags::new(flags).expect("non-empty"));
+        core::mem::drop(solver);
+
+        for ((&p, &r), &deal) in pons.iter().zip(&reference).zip(&deals) {
+            assert_tables_match(p, r, deal);
+        }
     }
 }
 

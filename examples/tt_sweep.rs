@@ -26,7 +26,7 @@
 use contract_bridge::FullDeal;
 use contract_bridge::deck::full_deal;
 use core::hint::black_box;
-use pons_dds::solve_deals_with_memory;
+use pons_dds::{NonEmptyStrainFlags, solve_deals_with_memory};
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 use std::time::Instant;
@@ -60,10 +60,20 @@ fn measure(default_mb: u32, max_mb: u32, deals: &[FullDeal]) -> Row {
     // rebuilds only on a budget change, so the timed call below reuses these
     // warm tables — steady state, matching how `solve_deals` reuses tables
     // across calls in production.
-    black_box(solve_deals_with_memory(deals, default_mb, max_mb));
+    black_box(solve_deals_with_memory(
+        deals,
+        NonEmptyStrainFlags::ALL,
+        default_mb,
+        max_mb,
+    ));
 
     let start = Instant::now();
-    let tables = solve_deals_with_memory(black_box(deals), default_mb, max_mb);
+    let tables = solve_deals_with_memory(
+        black_box(deals),
+        NonEmptyStrainFlags::ALL,
+        default_mb,
+        max_mb,
+    );
     let elapsed = start.elapsed();
     black_box(tables);
 

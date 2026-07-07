@@ -17,7 +17,7 @@ pons-dds = "0.2"
 
 ```rust
 use contract_bridge::{FullDeal, Seat, Strain};
-use pons_dds::{solve_deal, solve_deals};
+use pons_dds::{NonEmptyStrainFlags, solve_deal, solve_deals};
 
 // Solve one deal — fans the 5 strains across rayon workers.
 let deal: FullDeal = "N:AKQJT98765432... .AKQJT98765432.. \
@@ -26,8 +26,9 @@ let table = solve_deal(deal);
 assert_eq!(table[Strain::Spades].get(Seat::North).get(), 13);
 
 // Solve many deals in parallel — preferred for batch workloads.
+// The strain flags restrict which rows are computed.
 let deals = [deal, deal];
-let tables = solve_deals(&deals);
+let tables = solve_deals(&deals, NonEmptyStrainFlags::ALL);
 assert_eq!(tables.len(), 2);
 ```
 

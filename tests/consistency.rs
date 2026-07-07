@@ -3,6 +3,7 @@
 
 use contract_bridge::deck::full_deal;
 use contract_bridge::{FullDeal, Strain};
+use pons_dds::{NonEmptyStrainFlags, StrainFlags};
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 
@@ -28,13 +29,46 @@ fn solve_deal_sequential(deal: FullDeal) -> pons_dds::TrickCountTable {
 #[test]
 fn solve_deals_matches_single() {
     let deals = deals();
-    let batch = pons_dds::solve_deals(&deals);
+    let batch = pons_dds::solve_deals(&deals, NonEmptyStrainFlags::ALL);
     for (i, &d) in deals.iter().enumerate() {
         assert_eq!(
             batch[i],
             solve_deal_sequential(d),
             "batch vs single mismatch on deal #{i}: {d}",
         );
+    }
+}
+
+/// A strain-filtered batch must agree with the full batch on every requested
+/// strain and zero-fill the rest — for every singleton flag and a mixed set.
+#[test]
+fn solve_deals_strain_filters_match_full() {
+    let deals = deals();
+    let full = pons_dds::solve_deals(&deals, NonEmptyStrainFlags::ALL);
+
+    let cases = Strain::ASC
+        .map(StrainFlags::from_strain)
+        .into_iter()
+        .chain([StrainFlags::HEARTS | StrainFlags::NOTRUMP]);
+    for flags in cases {
+        let filtered =
+            pons_dds::solve_deals(&deals, NonEmptyStrainFlags::new(flags).expect("non-empty"));
+        for (i, (got, want)) in filtered.iter().zip(&full).enumerate() {
+            for strain in Strain::ASC {
+                if flags.contains(StrainFlags::from_strain(strain)) {
+                    assert_eq!(
+                        got[strain], want[strain],
+                        "filtered {flags:?} differs at {strain} on deal #{i}"
+                    );
+                } else {
+                    assert_eq!(
+                        got[strain],
+                        pons_dds::TrickCountRow::default(),
+                        "unrequested {strain} not zero-filled on deal #{i}"
+                    );
+                }
+            }
+        }
     }
 }
 
@@ -54,13 +88,13 @@ fn solve_deals_safe_on_small_stack() {
         let deals = deals.clone();
         std::thread::Builder::new()
             .stack_size(1024 * 1024) // 1 MiB — Windows' default; far below one solve
-            .spawn(move || pons_dds::solve_deals(&deals))
+            .spawn(move || pons_dds::solve_deals(&deals, NonEmptyStrainFlags::ALL))
             .expect("spawn small-stack thread")
             .join()
             .expect("small-stack solve panicked or overflowed its stack")
     };
 
-    let reference = pons_dds::solve_deals(&deals);
+    let reference = pons_dds::solve_deals(&deals, NonEmptyStrainFlags::ALL);
     assert_eq!(on_small_stack.len(), reference.len());
     for (i, (a, b)) in on_small_stack.iter().zip(&reference).enumerate() {
         assert_eq!(a, b, "small-stack vs normal mismatch on deal #{i}");
