@@ -111,7 +111,10 @@ impl Replay {
             banked: 0,
             trump: self.trump,
         };
-        while probe.table.len() < 4 {
+        // Complete the one remaining trick; `play` clears the table
+        // when the fourth card lands, so count the missing cards rather
+        // than watching the table length.
+        for _ in 0..4 - self.table.len() {
             let seat = ((probe.leader + probe.table.len() as i32) & 3) as usize;
             let (suit, rank) = (0..DDS_SUITS)
                 .find_map(|s| {
