@@ -33,7 +33,11 @@ criterion = { version = "0.8", features = ["html_reports"] }
 # FFI-backed DDS 2.9 reference engine, used as the oracle for the
 # `compare_ddss` cross-check test and head-to-head bench. pons-dds is pure
 # Rust, so it links cleanly alongside ddss-sys's C++ (unlike dds-bridge-sys).
+# The raw -sys crate is used directly by `compare_ddss_boards` to call
+# SolveBoard with mode = 1 (ddss's safe wrapper hardcodes mode = 0, whose
+# forced-card `-2` sentinel its own decoder cannot represent).
 ddss = "0.1"
+ddss-sys = "0.1"
 rand = "0.10"
 
 [[bench]]

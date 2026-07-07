@@ -565,6 +565,7 @@ dependencies = [
  "contract-bridge",
  "criterion",
  "ddss",
+ "ddss-sys",
  "rand",
  "rayon",
  "thiserror",
