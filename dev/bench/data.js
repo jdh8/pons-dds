@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1783460118465,
+  "lastUpdate": 1783551189237,
   "repoUrl": "https://github.com/jdh8/pons-dds",
   "entries": {
     "Benchmark": [
@@ -791,6 +791,66 @@ window.BENCHMARK_DATA = {
             "name": "analyse_plays_32",
             "value": 301476674,
             "range": "± 5879073",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "committer": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "distinct": true,
+          "id": "0fbaaf87e825b8bb77d54c822e1d7b8158291cf6",
+          "message": "ci: deploy the web demo to GitHub Pages\n\nBuild web/ with wasm-pack and publish the static site (index.html, app.js,\nstyle.css, pkg) to GitHub Pages on push to main.  No C++ toolchain or\nsubmodule is needed since the demo depends on pons-dds directly.  Add\nweb/README with build, run, test, and deploy notes.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+          "timestamp": "2026-07-09T06:43:25+08:00",
+          "tree_id": "b9c09f9826d998f206dbb1ec3d739ea879886ab8",
+          "url": "https://github.com/jdh8/pons-dds/commit/0fbaaf87e825b8bb77d54c822e1d7b8158291cf6"
+        },
+        "date": 1783551188769,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "solve_deal",
+            "value": 90518437,
+            "range": "± 182524390",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/32",
+            "value": 3074100306,
+            "range": "± 84770537",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/200",
+            "value": 22313309007,
+            "range": "± 886973609",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_boards/32",
+            "value": 323615600,
+            "range": "± 3011497",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_boards/200",
+            "value": 1662279169,
+            "range": "± 28025304",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "analyse_plays_32",
+            "value": 325210500,
+            "range": "± 9768959",
             "unit": "ns/iter"
           }
         ]
