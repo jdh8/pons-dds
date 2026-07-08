@@ -1,0 +1,206 @@
+/* Subset of Source Han Sans JP for suits — served from the jdh8.github.io
+   origin (see /fonts/SUITS-README.md), shared by all card sites. */
+@font-face {
+  font-family: "Source Han Suits";
+  font-weight: 1 1000;
+  font-style: oblique -90deg 90deg;
+  src: url("https://jdh8.github.io/fonts/suits.woff2") format("woff2");
+}
+
+/* Kitchen-table bridge: flat felt, card-paper panels, gold action buttons.
+   Same plainness as the pons demo — no gradients, no gloss. */
+
+:root {
+  --spade: #1a1a1a;
+  --heart: #c0392b;
+  --diamond: #e07b00; /* warm orange — bidding theory calls ♦ a red suit; never blue */
+  --club: #1e7a45;    /* four-colour green ♣ */
+  --felt: #2c7a63;
+  --paper: #fdfdf7;
+  --ink: #222;
+  --gold: #f5c518;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font: 15px/1.4 "Source Han Suits", system-ui, sans-serif;
+  color: #f2f2f2;
+  background: var(--felt);
+  min-height: 100vh;
+}
+
+.hidden { display: none !important; }
+
+header {
+  padding: 0.5rem 1rem;
+  display: flex;
+  align-items: baseline;
+  gap: 1.5rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+  flex-wrap: wrap;
+}
+h1 { font-size: 1.2rem; margin: 0; }
+nav { display: flex; gap: 0.4rem; }
+nav button {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.2rem 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+nav button:hover { background: rgba(255, 255, 255, 0.12); }
+nav button.active { background: var(--gold); border-color: var(--gold); color: var(--ink); }
+.tagline { opacity: 0.75; font-size: 0.85rem; }
+
+main { max-width: 60rem; margin: 0 auto; padding: 1rem; }
+section { display: flex; flex-direction: column; gap: 1rem; align-items: stretch; }
+
+/* Controls row: quiet on the felt; the primary button is the gold action. */
+.controls { display: flex; flex-wrap: wrap; gap: 0.8rem; align-items: center; }
+.controls label { display: flex; gap: 0.35rem; align-items: center; font-size: 0.9rem; }
+.controls select,
+.controls input {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+}
+.controls option { color: var(--ink); }
+
+button.primary {
+  font: inherit;
+  font-weight: 600;
+  padding: 0.35rem 1rem;
+  border: 0;
+  border-radius: 6px;
+  background: var(--gold);
+  color: var(--ink);
+  cursor: pointer;
+}
+button.primary:hover { background: #ffd83a; }
+button.primary:disabled { opacity: 0.4; cursor: default; background: var(--gold); }
+
+.boardinfo { opacity: 0.85; font-size: 0.9rem; min-height: 1.2rem; }
+
+/* Card-paper panels on the felt. */
+.panel {
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 0.7rem 0.9rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+/* Hands: four suit lines, glyph coloured per suit. */
+.seat-head { font-weight: 700; margin-bottom: 0.3rem; }
+.suitline { display: flex; gap: 0.5rem; font-weight: 600; font-size: 1.05rem; }
+.ranks { letter-spacing: 0.1em; }
+.s-s { color: var(--spade); }
+.s-h { color: var(--heart); }
+.s-d { color: var(--diamond); }
+.s-c { color: var(--club); }
+
+/* Double-dummy table + par/lead lines. */
+.ddpanel { margin-top: 0.25rem; }
+.panel-title {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.65;
+  margin-bottom: 0.35rem;
+}
+.solving { color: var(--ink); opacity: 0.6; font-style: italic; }
+table.dd { border-collapse: collapse; margin: 0 auto; }
+table.dd th, table.dd td {
+  text-align: center;
+  padding: 0.15rem 0.7rem;
+  font-weight: 600;
+}
+table.dd th { font-size: 0.8rem; opacity: 0.75; }
+table.dd td { border-top: 1px solid rgba(0, 0, 0, 0.08); }
+.verdict { text-align: center; margin-top: 0.5rem; font-weight: 700; }
+.lead { text-align: center; margin-top: 0.3rem; }
+
+/* Compass: N top centre, W left, E right, S bottom centre. */
+.compass {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-areas: ". n ." "w . e" ". s .";
+  gap: 0.6rem;
+  justify-items: center;
+}
+.compass-seat {
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 0.5rem 0.8rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  min-width: 10rem;
+}
+.pos-n { grid-area: n; }
+.pos-e { grid-area: e; }
+.pos-s { grid-area: s; }
+.pos-w { grid-area: w; }
+
+/* Deal editor: PBN field ⇄ card palette. Cells tint by owner seat. */
+#e-pbn { flex: 1; min-width: 16rem; font-family: ui-monospace, monospace; }
+.controls #e-copy, .controls #e-clear, .controls #sv-edit {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.3rem 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.controls #e-copy:hover, .controls #e-clear:hover, .controls #sv-edit:hover { background: rgba(255, 255, 255, 0.12); }
+
+.editgrid { display: flex; flex-direction: column; gap: 0.35rem; }
+.editrow { display: grid; grid-template-columns: 1.5rem repeat(13, 1fr); gap: 0.3rem; align-items: center; }
+/* Paper chip so the four-colour ♣/♦ glyphs don't vanish into the green felt. */
+.editsuit {
+  width: 1.5rem;
+  height: 1.5rem;
+  line-height: 1.5rem;
+  margin: 0 auto;
+  font-size: 1rem;
+  font-weight: 700;
+  text-align: center;
+  background: var(--paper);
+  border-radius: 50%;
+}
+.editcell {
+  font: inherit;
+  font-weight: 700;
+  padding: 0.3rem 0;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 5px;
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+}
+.editcell small { font-size: 0.65rem; font-weight: 700; opacity: 0.85; min-height: 0.8rem; }
+.editcell:hover { transform: translateY(-1px); }
+/* One tint per seat — the "piece colour" of the board editor. */
+.editcell.seat-n { background: #cfe8d6; border-color: #1e7a45; }
+.editcell.seat-e { background: #f6d9b0; border-color: #b06000; }
+.editcell.seat-s { background: #cfe0f5; border-color: #1a74d9; }
+.editcell.seat-w { background: #f3cfd4; border-color: #8f2f3a; }
+
+@media (max-width: 40rem) {
+  .compass { grid-template-columns: 1fr 1fr; grid-template-areas: "n n" "w e" "s s"; }
+  .compass-seat { min-width: 0; width: 100%; }
+}

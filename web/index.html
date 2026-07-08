@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>pons-dds — double dummy solver</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>pons-dds</h1>
+    <nav>
+      <button data-tab="solve">Solve</button>
+      <button data-tab="edit">Edit</button>
+    </nav>
+    <span class="tagline">client-side double dummy — pure Rust, compiled to wasm</span>
+  </header>
+  <main>
+    <section id="solve">
+      <div class="controls">
+        <label>Dealer <select id="sv-dealer">
+          <option selected>N</option><option>E</option><option>S</option><option>W</option>
+        </select></label>
+        <label>Vul <select id="sv-vul">
+          <option value="none" selected>None</option><option value="ns">NS</option>
+          <option value="ew">EW</option><option value="both">Both</option>
+        </select></label>
+        <button id="sv-random" class="primary">Random deal</button>
+        <button id="sv-edit">Edit →</button>
+      </div>
+      <div id="sv-hands"></div>
+      <div id="sv-dd" class="panel ddpanel"></div>
+    </section>
+    <section id="edit" class="hidden">
+      <div class="controls">
+        <input id="e-pbn" type="text" spellcheck="false" placeholder="N:AKQ.… (PBN deal) — type here or click cards below">
+        <button id="e-copy">Copy PBN</button>
+        <button id="e-random" class="primary">Random</button>
+        <button id="e-clear">Clear</button>
+        <button id="e-solve" class="primary">Solve →</button>
+      </div>
+      <div id="e-status" class="boardinfo"></div>
+      <div id="e-grid" class="editgrid"></div>
+      <div id="e-board"></div>
+    </section>
+  </main>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
