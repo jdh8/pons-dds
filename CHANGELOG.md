@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+### Changed
+
+- Web UI: factored the outlined "Edit →" / Copy PBN / Clear button styling into
+  a reusable `button.secondary` class (parallel to `button.primary`). No visual
+  change.
+
 ## [0.2.0] - 2026-07-08
 
 ### Added

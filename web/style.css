@@ -88,6 +88,20 @@ button.primary {
 button.primary:hover { background: #ffd83a; }
 button.primary:disabled { opacity: 0.4; cursor: default; background: var(--gold); }
 
+/* Quiet outlined action, e.g. "Edit →" / Copy PBN / Clear. */
+button.secondary {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.3rem 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+button.secondary:hover { background: rgba(255, 255, 255, 0.12); }
+button.secondary:disabled { opacity: 0.4; cursor: default; }
+
 .boardinfo { opacity: 0.85; font-size: 0.9rem; min-height: 1.2rem; }
 
 /* Card-paper panels on the felt. */
@@ -152,17 +166,6 @@ table.dd td { border-top: 1px solid rgba(0, 0, 0, 0.08); }
 
 /* Deal editor: PBN field ⇄ card palette. Cells tint by owner seat. */
 #e-pbn { flex: 1; min-width: 16rem; font-family: ui-monospace, monospace; }
-.controls #e-copy, .controls #e-clear, .controls #sv-edit {
-  font: inherit;
-  font-size: 0.9rem;
-  padding: 0.3rem 0.8rem;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  border-radius: 6px;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-}
-.controls #e-copy:hover, .controls #e-clear:hover, .controls #sv-edit:hover { background: rgba(255, 255, 255, 0.12); }
 
 .editgrid { display: flex; flex-direction: column; gap: 0.35rem; }
 .editrow { display: grid; grid-template-columns: 1.5rem repeat(13, 1fr); gap: 0.3rem; align-items: center; }
