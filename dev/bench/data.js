@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1783551189237,
+  "lastUpdate": 1783622737444,
   "repoUrl": "https://github.com/jdh8/pons-dds",
   "entries": {
     "Benchmark": [
@@ -851,6 +851,66 @@ window.BENCHMARK_DATA = {
             "name": "analyse_plays_32",
             "value": 325210500,
             "range": "± 9768959",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "committer": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "distinct": true,
+          "id": "c130ee33f59f435e72f7199b48e19a0daaa0ebbd",
+          "message": "refactor(web): extract button.secondary class\n\nFactor the outlined \"Edit →\" / Copy PBN / Clear button styling into a\nreusable `button.secondary` class parallel to `button.primary`. No\nvisual change. Mirrors the same refactor in the pons demo UI.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+          "timestamp": "2026-07-10T02:26:54+08:00",
+          "tree_id": "5df145215bb4d9d997fdbe0c1a28b28b8da328e6",
+          "url": "https://github.com/jdh8/pons-dds/commit/c130ee33f59f435e72f7199b48e19a0daaa0ebbd"
+        },
+        "date": 1783622736616,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "solve_deal",
+            "value": 81271014,
+            "range": "± 173365166",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/32",
+            "value": 2803093690,
+            "range": "± 61420367",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/200",
+            "value": 21145546609,
+            "range": "± 635235453",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_boards/32",
+            "value": 302989185,
+            "range": "± 3743847",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_boards/200",
+            "value": 1590454345,
+            "range": "± 17579058",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "analyse_plays_32",
+            "value": 313609405,
+            "range": "± 6538114",
             "unit": "ns/iter"
           }
         ]
