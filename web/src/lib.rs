@@ -3,10 +3,10 @@
 //! JSON back (the gin-rummy pattern); the actual solving is the only thing that
 //! crosses into wasm.
 
-use contract_bridge::{FullDeal, Rank, Seat, Strain, Suit};
+use contract_bridge::{Contract, FullDeal, Rank, Seat, Strain, Suit};
 use pons_dds::{
-    Board, CurrentTrick, Objective, Par, Solver, Target, TrickCountTable, Vulnerability,
-    calculate_par, solve_deal_on,
+    Board, CurrentTrick, Objective, Par, ParContract, Solver, Target, TrickCountTable,
+    Vulnerability, calculate_par, solve_deal_on,
 };
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
@@ -22,7 +22,7 @@ struct DdRow {
 /// Best opening lead against the par contract.
 #[derive(Serialize)]
 struct Lead {
-    /// The par contract this lead is played against, e.g. `4♥ by S`.
+    /// The par contract this lead is played against, e.g. `4♥S`.
     contract: String,
     /// The opening leader (declarer's LHO).
     leader: String,
@@ -39,7 +39,7 @@ struct SolveOut {
     table: Vec<DdRow>,
     /// Par score, signed from North–South's perspective.
     par_score: i32,
-    /// Par contracts, e.g. `["4♥ by S"]`; empty when the board is passed out.
+    /// Par contracts, e.g. `["4♠xNS-2"]`; empty when the board is passed out.
     par_contracts: Vec<String>,
     /// Best opening lead, or `None` when the board is passed out.
     lead: Option<Lead>,
@@ -116,11 +116,7 @@ fn solve_deal_json(
             })
             .collect(),
         par_score: par.score,
-        par_contracts: par
-            .contracts
-            .iter()
-            .map(|pc| format!("{} by {}", pc.contract, pc.declarer))
-            .collect(),
+        par_contracts: combine_par_contracts(&par.contracts),
         lead: best_lead(solver, deal, &table, &par),
     })
 }
@@ -158,7 +154,7 @@ fn best_lead(
         .collect();
 
     Some(Lead {
-        contract: format!("{} by {}", pc.contract, declarer),
+        contract: format!("{}{}", pc.contract, declarer),
         leader: leader.to_string(),
         best,
         declarer_tricks,
@@ -168,6 +164,41 @@ fn best_lead(
 /// A card face as glyph-then-rank, e.g. `♠A`.
 fn card_label(suit: Suit, rank: Rank) -> String {
     format!("{suit}{rank}")
+}
+
+/// Combine par contracts that share a contract and result into one entry each,
+/// merging pair declarers: `4♠x by N` + `4♠x by S` (both −2) → `4♠xNS-2`.
+fn combine_par_contracts(contracts: &[ParContract]) -> Vec<String> {
+    let mut groups: Vec<(Contract, i8, Vec<Seat>)> = Vec::new();
+    for pc in contracts {
+        match groups
+            .iter_mut()
+            .find(|(c, o, _)| *c == pc.contract && *o == pc.overtricks)
+        {
+            Some((_, _, seats)) => seats.push(pc.declarer),
+            None => groups.push((pc.contract, pc.overtricks, vec![pc.declarer])),
+        }
+    }
+    groups
+        .into_iter()
+        .map(|(contract, overtricks, seats)| {
+            let declarers: String = Seat::ALL
+                .iter()
+                .filter(|s| seats.contains(s))
+                .map(|s| s.letter())
+                .collect();
+            format!("{contract}{declarers}{}", result_label(overtricks))
+        })
+        .collect()
+}
+
+/// The result relative to the contract: `=`, `+2`, or `-2`.
+fn result_label(overtricks: i8) -> String {
+    match overtricks {
+        0 => "=".to_owned(),
+        n if n > 0 => format!("+{n}"),
+        n => n.to_string(),
+    }
 }
 
 #[cfg(test)]
@@ -195,5 +226,28 @@ mod tests {
         assert!(lead.contract.starts_with("7♠"), "got {}", lead.contract);
         assert_eq!(lead.leader, "E"); // declarer North's LHO
         assert_eq!(lead.declarer_tricks, 13);
+    }
+
+    #[test]
+    fn combines_pair_declarers_and_result() {
+        // A pair sacrifice collapses two entries into one `NS`/`EW` line.
+        let sac = |seat| ParContract {
+            contract: "4Sx".parse().unwrap(),
+            declarer: seat,
+            overtricks: -2,
+        };
+        assert_eq!(
+            combine_par_contracts(&[sac(Seat::North), sac(Seat::South)]),
+            ["4♠xNS-2"],
+        );
+
+        // A single-declarer make: `=` for exact, `+n` for overtricks.
+        let game = |overtricks| ParContract {
+            contract: "3N".parse().unwrap(),
+            declarer: Seat::North,
+            overtricks,
+        };
+        assert_eq!(combine_par_contracts(&[game(0)]), ["3NTN="]);
+        assert_eq!(combine_par_contracts(&[game(2)]), ["3NTN+2"]);
     }
 }

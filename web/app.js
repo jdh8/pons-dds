@@ -94,10 +94,11 @@ function solveHTML(out) {
   const rows = out.table.slice().reverse().map((r) =>
     `<tr><th>${colorizeCalls(r.strain)}</th>` + r.tricks.map((t) => `<td>${t}</td>`).join('') + '</tr>',
   ).join('');
-  const score = out.par_score > 0 ? `+${out.par_score}` : `${out.par_score}`;
+  // Par score is signed from N/S; the winning side is whoever the points go to.
+  const side = out.par_score < 0 ? 'EW' : 'NS';
   const par = out.par_contracts.length
-    ? `<div class="verdict">Par ${score} (N/S) — ${out.par_contracts.map(colorizeCalls).join(', ')}</div>`
-    : '<div class="verdict">Par: passed out</div>';
+    ? `<div class="verdict">${Math.abs(out.par_score)} to ${side} — ${out.par_contracts.map(colorizeCalls).join(', ')}</div>`
+    : '<div class="verdict">Passed out</div>';
   const lead = out.lead ? leadHTML(out.lead) : '';
   return '<div class="panel-title">Double dummy</div>' +
     `<table class="dd">${head}${rows}</table>${par}${lead}`;
