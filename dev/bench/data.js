@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1783622737444,
+  "lastUpdate": 1783902309057,
   "repoUrl": "https://github.com/jdh8/pons-dds",
   "entries": {
     "Benchmark": [
@@ -911,6 +911,66 @@ window.BENCHMARK_DATA = {
             "name": "analyse_plays_32",
             "value": 313609405,
             "range": "± 6538114",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "committer": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "distinct": true,
+          "id": "cf7b6a92068919db48d4344e3edce28aface96cf",
+          "message": "feat(web): compact, readable DD par verdict\n\nRender par as \"<points> to <side> — <contract><declarers><result>\",\ne.g. \"300 to EW — 4♠xNS-2\": drop the \"Par …(N/S)\" framing for the side\nthat scores, merge pair declarers, and show the result relative to the\ncontract (=/+n/-n). Apply the same compact contract form to the best-lead line.",
+          "timestamp": "2026-07-13T08:16:40+08:00",
+          "tree_id": "18d2c112bbb7e4027baf846bd61ea7365f2def88",
+          "url": "https://github.com/jdh8/pons-dds/commit/cf7b6a92068919db48d4344e3edce28aface96cf"
+        },
+        "date": 1783902308215,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "solve_deal",
+            "value": 84170570,
+            "range": "± 169877953",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/32",
+            "value": 2790734120,
+            "range": "± 40585609",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/200",
+            "value": 19717939638,
+            "range": "± 667756104",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_boards/32",
+            "value": 298284471,
+            "range": "± 5773895",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_boards/200",
+            "value": 1559512366,
+            "range": "± 26882259",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "analyse_plays_32",
+            "value": 293595382,
+            "range": "± 5524165",
             "unit": "ns/iter"
           }
         ]
