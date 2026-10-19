@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792423676219,
+  "lastUpdate": 1792429205359,
   "repoUrl": "https://github.com/jdh8/pons-dds",
   "entries": {
     "Benchmark": [
@@ -1031,6 +1031,66 @@ window.BENCHMARK_DATA = {
             "name": "analyse_plays_32",
             "value": 283741386,
             "range": "± 5568364",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "committer": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "distinct": true,
+          "id": "12689f0ddbd9a95fd07b4d4bca6c273bb05e640c",
+          "message": "Limit the suit font to the four filled suits\n\nWithout a unicode-range, the Libertinus Suits face is the first\navailable font in the body stack, so its short ascent sets every line\nbox and raises every baseline by a pixel or two.  Restricting it to\nU+2660, U+2663, and U+2665-2666 leaves it without a space glyph: lines\nkeep the fallback's metrics and the face only draws the suits.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>",
+          "timestamp": "2026-10-20T00:47:59+08:00",
+          "tree_id": "9b3af1daa68cc2aa53bafc0c195780bc172b09cc",
+          "url": "https://github.com/jdh8/pons-dds/commit/12689f0ddbd9a95fd07b4d4bca6c273bb05e640c"
+        },
+        "date": 1792429204963,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "solve_deal",
+            "value": 74002239,
+            "range": "± 160817380",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/32",
+            "value": 2746018039,
+            "range": "± 51357099",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/200",
+            "value": 19579119611,
+            "range": "± 554577847",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_boards/32",
+            "value": 293821685,
+            "range": "± 2771643",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_boards/200",
+            "value": 1518808212,
+            "range": "± 24599369",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "analyse_plays_32",
+            "value": 286203793,
+            "range": "± 6180457",
             "unit": "ns/iter"
           }
         ]
