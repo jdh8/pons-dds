@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1783902309057,
+  "lastUpdate": 1792423676219,
   "repoUrl": "https://github.com/jdh8/pons-dds",
   "entries": {
     "Benchmark": [
@@ -971,6 +971,66 @@ window.BENCHMARK_DATA = {
             "name": "analyse_plays_32",
             "value": 293595382,
             "range": "± 5524165",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "committer": {
+            "email": "chen.pang.he@jdh8.org",
+            "name": "Chen-Pang He",
+            "username": "jdh8"
+          },
+          "distinct": true,
+          "id": "05b28275977ddf635758d031a0dbb5fdaade0300",
+          "message": "Rename suit font family to Libertinus Suits\n\njdh8.github.io/fonts/suits.woff2 is now a Libertinus Sans subset.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>",
+          "timestamp": "2026-10-19T23:19:45+08:00",
+          "tree_id": "54b6757674af18ca814f1cb8f0c415d3d46e03d5",
+          "url": "https://github.com/jdh8/pons-dds/commit/05b28275977ddf635758d031a0dbb5fdaade0300"
+        },
+        "date": 1792423675420,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "solve_deal",
+            "value": 75991350,
+            "range": "± 165478120",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/32",
+            "value": 2741051672,
+            "range": "± 58085709",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_deals/200",
+            "value": 19556158958,
+            "range": "± 629368227",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_boards/32",
+            "value": 289092204,
+            "range": "± 2450096",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve_boards/200",
+            "value": 1524459404,
+            "range": "± 13101319",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "analyse_plays_32",
+            "value": 283741386,
+            "range": "± 5568364",
             "unit": "ns/iter"
           }
         ]
